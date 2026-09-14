@@ -26,6 +26,9 @@ from liver_intel.sources.base import Context          # noqa: E402
 
 WIRE = "https://wire.example.com/rss"
 
+#: Fabricated documents. The company names are real, the news is not -- this
+#: exercises the pipeline, it is not publishable copy, and the WeChat article it
+#: produces is stamped accordingly.
 DOCS = [
     ("a", "Madrigal Announces Phase 3 Topline Results in MASH",
      "Madrigal Pharmaceuticals today announced that the Phase 3 MAESTRO-NASH trial "
@@ -49,6 +52,14 @@ DOCS = [
      "The company will present at an investor conference next month."),
 ]
 
+#: One document carries figures so the article renderer has something to lay out.
+FIGURES = {
+    "a": ('<meta property="og:image" content="/media/maestro-hero.jpg">',
+          '<img src="/media/kaplan-meier.png" width="900" height="600" '
+          'alt="MASH resolution by treatment arm"/>'
+          '<img src="/media/logo.png" width="300" height="120"/>'),
+}
+
 RSS_ITEMS = "".join(
     f"<item><title>{title}</title>"
     f"<link>https://www.globenewswire.com/{slug}</link>"
@@ -62,7 +73,9 @@ class CannedFetcher:
     def __init__(self):
         self.routes = {WIRE: FEED_BODY}
         for slug, title, body in DOCS:
-            self.routes[f"https://www.globenewswire.com/{slug}"] = f"<p>{body}</p>"
+            head, figures = FIGURES.get(slug, ("", ""))
+            self.routes[f"https://www.globenewswire.com/{slug}"] = (
+                f"<html><head>{head}</head><body><p>{body}</p>{figures}</body></html>")
 
     def get(self, url, headers=None, etag=None, last_modified=None, allow_304=True):
         if url not in self.routes:
@@ -85,7 +98,8 @@ def main() -> int:
                 domain_map=domain_map, today=today, since=since))
     pipeline.llm.build_judge = lambda enabled=True: NullJudge()
 
-    daily = pipeline.run_daily(settings, today="2026-09-14", only=["newswire"])
+    daily = pipeline.run_daily(settings, today="2026-09-14", only=["newswire"],
+                               wechat=True)
     print(f"collected {daily.collected} | daily {len(daily.daily)} {daily.counts} "
           f"| weekly pool +{len(daily.weekly)}\n")
     print(daily.report_path.read_text(encoding="utf-8"))
@@ -93,6 +107,20 @@ def main() -> int:
     weekly = pipeline.run_weekly(settings, today="2026-09-18")
     print("=" * 72)
     print(weekly.report_path.read_text(encoding="utf-8"))
+
+    if daily.wechat_path:
+        # Re-render with the demo watermark: the copy above is fabricated and
+        # must not be mistaken for something ready to publish.
+        from liver_intel import report_wechat
+
+        article = report_wechat.wechat_html(
+            daily.daily, "2026-09-14", domain_map, notes=daily.notes,
+            weekly_pool_size=len(daily.weekly),
+            watermark="演示数据：以下稿件内容为测试用虚构文本，公司名称真实但事件不实，"
+                      "仅用于检查排版与流水线，切勿发布。")
+        daily.wechat_path.write_text(article, encoding="utf-8")
+        print("=" * 72)
+        print(f"WeChat article: {daily.wechat_path}")
     return 0
 
 

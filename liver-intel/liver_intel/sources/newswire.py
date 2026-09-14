@@ -11,6 +11,7 @@ import logging
 import re
 from typing import Any
 
+from ..images import ImageCandidate, extract_images
 from ..models import Item, as_iso_date, canonical_url, is_excluded_host
 from ..textutil import clip, html_to_text
 from .base import BaseSource, Context
@@ -124,23 +125,27 @@ class NewswireSource(BaseSource):
                 if ctx.store.is_seen(item.key):
                     continue
                 if self.fetch_bodies and bodies_fetched < self.max_bodies:
-                    body = self._body(ctx, key_url)
+                    body, figures = self._body(ctx, key_url)
                     if body:
                         item.meta["body"] = clip(body, 20_000)
                         bodies_fetched += 1
+                    if figures:
+                        # Candidates only: the release published them, the
+                        # operator decides whether they may be reused.
+                        item.meta["images"] = [f.to_json() for f in figures]
                 items.append(item)
         return self.emit(ctx, items)
 
     @staticmethod
-    def _body(ctx: Context, url: str) -> str:
+    def _body(ctx: Context, url: str) -> tuple[str, list[ImageCandidate]]:
         try:
             response = ctx.fetcher.get(url, allow_304=False)
         except Exception as exc:
             log.debug("body fetch failed for %s: %s", url, exc)
-            return ""
+            return "", []
         if not response.ok:
-            return ""
-        return html_to_text(response.text)
+            return "", []
+        return html_to_text(response.text), extract_images(response.text, url)
 
 
 def _wire_name(url: str) -> str:

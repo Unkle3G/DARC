@@ -105,7 +105,8 @@ def cmd_daily(args: argparse.Namespace) -> int:
     settings = _settings(args)
     result = run_daily(settings, today=args.date, since=args.since,
                        only=args.source.split(",") if args.source else None,
-                       use_llm=not args.no_llm, write=not args.dry_run)
+                       use_llm=not args.no_llm, write=not args.dry_run,
+                       wechat=args.wechat, with_images=args.with_images)
     print(f"collected {result.collected}; daily {len(result.daily)} "
           f"{json.dumps(result.counts)}; weekly pool +{len(result.weekly)}")
     for note in result.notes:
@@ -113,6 +114,8 @@ def cmd_daily(args: argparse.Namespace) -> int:
     if result.report_path:
         print(f"wrote {result.report_path}")
         print(f"wrote {result.json_path}")
+    if result.wechat_path:
+        print(f"wrote {result.wechat_path}  (paste into the WeChat editor)")
     return 0
 
 
@@ -166,6 +169,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cap", type=int)
     p.add_argument("--no-llm", action="store_true",
                    help="skip the significance step, use deterministic rules only")
+    p.add_argument("--wechat", action="store_true",
+                   help="also render a WeChat Official Account long-form article")
+    p.add_argument("--with-images", action="store_true",
+                   help="download figures published by the source documents")
     p.add_argument("--allow-unverified", action="store_true",
                    help="use registry entries that have not passed verification")
     p.add_argument("--dry-run", action="store_true")

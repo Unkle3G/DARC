@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Iterable
 
 from . import grade as grading
-from . import llm, report, select
+from . import images as image_tools
+from . import llm, report, report_wechat, select
 from .conference import Calendar
 from .config import Settings
 from .domain_map import DomainMap, load as load_domain_map
@@ -31,6 +32,7 @@ class RunResult:
     notes: list[str] = field(default_factory=list)
     report_path: Path | None = None
     json_path: Path | None = None
+    wechat_path: Path | None = None
 
     @property
     def counts(self) -> dict[str, int]:
@@ -112,9 +114,24 @@ def _attach_rule_evidence(item: Item, source_text: str, tagger: Tagger) -> None:
             break
 
 
+def fetch_images(items: Iterable[Item], ctx: Context, out_dir: Path) -> int:
+    """Download each item's candidate figures so they can be uploaded to WeChat."""
+    saved = 0
+    for item in items:
+        candidates = image_tools.from_meta(item.meta)
+        if not candidates:
+            continue
+        target = out_dir / "images" / item.key[:12]
+        got = image_tools.download(candidates, ctx.fetcher, target)
+        item.meta["images"] = [c.to_json() for c in got]
+        saved += sum(1 for c in got if c.local_path)
+    return saved
+
+
 def run_daily(settings: Settings, today: str | None = None, since: str | None = None,
               only: list[str] | None = None, use_llm: bool = True,
-              write: bool = True) -> RunResult:
+              write: bool = True, wechat: bool = False,
+              with_images: bool = False) -> RunResult:
     settings.ensure_dirs()
     today = today or today_iso(settings.report_tz)
     result = RunResult(report_date=today)
@@ -143,6 +160,13 @@ def run_daily(settings: Settings, today: str | None = None, since: str | None = 
                           "daily": len(result.daily),
                           "weekly": len(result.weekly)})
 
+        if with_images and result.daily:
+            saved = fetch_images(result.daily, ctx, settings.out_dir)
+            result.notes.append(
+                f"downloaded {saved} figure(s) for the WeChat article"
+                if saved else
+                "no figure could be downloaded; the article falls back to remote URLs")
+
         if write:
             body = report.daily_markdown(
                 result.daily, today, ctx.domain_map,
@@ -153,6 +177,12 @@ def run_daily(settings: Settings, today: str | None = None, since: str | None = 
             result.json_path.write_text(
                 json.dumps([item.to_json() for item in result.daily],
                            ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            if wechat:
+                article = report_wechat.wechat_html(
+                    result.daily, today, ctx.domain_map, notes=result.notes,
+                    weekly_pool_size=len(result.weekly))
+                result.wechat_path = settings.out_dir / f"liver_daily_{today}_wechat.html"
+                result.wechat_path.write_text(article, encoding="utf-8")
     return result
 
 

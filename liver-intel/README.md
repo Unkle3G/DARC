@@ -11,7 +11,9 @@ python -m liver_intel.cli status                 # registry / roster / calendar
 python -m liver_intel.cli discover --source newswire
 python -m liver_intel.cli verify   --source T1   # promotes candidates to verified
 python -m liver_intel.cli daily                  # collect, grade, write the report
+python -m liver_intel.cli daily --wechat --with-images   # + 公众号 long-form article
 python -m liver_intel.cli weekly                 # Friday digest
+python3 scripts/demo_offline.py                  # run the pipeline on canned docs
 ```
 
 ## Read this first
@@ -94,6 +96,30 @@ meant L13 to bypass the main-line gate as well, change `select.has_main_line`.
 - **Tagger vocabulary:** `tagger.STUDY_PATTERNS` for layer 2; layers 1 and 3 read
   the dictionary.
 
+## 公众号 output
+
+`daily --wechat` writes `out/liver_daily_<date>_wechat.html` alongside the
+markdown: one pasteable long-form article, inline styles only (the editor strips
+`<style>` and `<link>`), sized for the ~677px column.
+
+The no-commentary rule still applies. The layout gives the material more room —
+section headers, figures, pull quotes — but adds no interpretation: the prose is
+limited to counts, scope and provenance, and everything substantive is either an
+extracted field or text quoted verbatim. Analysis is an editorial pass by a
+human, not something the renderer invents.
+
+`--with-images` downloads the figures **the source document itself published**
+(`og:image` and content `<img>`; logos, tracking pixels, SVG icons and anything
+under 200px are filtered out in `images.py`). Nothing is pulled from a search
+engine or a media site. Each figure is captioned with its source URL because
+reuse rights are the operator's call, and WeChat will not hot-link a remote
+image — the files are saved under `out/images/` to be uploaded to the account's
+own library.
+
+`report_wechat.wechat_html(..., watermark=...)` prints a banner above the
+headline; `scripts/demo_offline.py` uses it to stamp its output, since the demo
+documents are fabricated copy about real companies.
+
 ## Output contract
 
 `Item.to_json()` emits exactly, in order:
@@ -113,7 +139,7 @@ pool.
 ## Tests
 
 ```bash
-python -m pytest        # 82 tests, no network
+python -m pytest        # 98 tests, no network
 ```
 
 Offline throughout: HTTP is served by a fake fetcher, and the significance step
