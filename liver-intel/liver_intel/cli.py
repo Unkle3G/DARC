@@ -20,10 +20,11 @@ from .config import Settings
 from .conference import Calendar
 from .discover import discover
 from .domain_map import load as load_domain_map
-from .feeds import Registry
+from .feeds import Feed, Registry
 from .http import Fetcher
 from .models import today_iso
 from .pipeline import run_daily, run_weekly
+from .preflight import check as preflight_check, summarise as preflight_summary
 from .store import Store
 from .verify import verify_registry
 
@@ -179,6 +180,39 @@ def cmd_authors(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_preflight(args: argparse.Namespace) -> int:
+    """Can this machine reach the sources at all? Run this first."""
+    registry = Registry.load()
+    # Fail fast: this is a reachability probe, not a collection run. Retrying a
+    # refused tunnel 4 times per host just makes the answer slower.
+    results = preflight_check(registry, Fetcher(max_retries=1, timeout=10.0))
+    for result in results:
+        mark = "ok  " if result.reachable else "FAIL"
+        print(f"{mark} {result.status:12s} {result.host:30s} {result.tasks:8s} "
+              f"{result.detail}")
+    print()
+    print(preflight_summary(results))
+    return 0 if all(r.reachable for r in results) else 1
+
+
+def cmd_feeds_add(args: argparse.Namespace) -> int:
+    """Hand-add a candidate endpoint found by a human (T1 subscription forms).
+
+    It lands as ``unverified`` like anything else and still has to survive
+    `verify` before a collector will use it.
+    """
+    registry = Registry.load()
+    feed = Feed(id=args.id, url=args.url, task=args.task or "", source=args.source,
+                kind=args.kind, src_kind=args.src_kind, status="unverified",
+                company=args.company, keywords=args.keyword or [],
+                note=args.note or "hand-added; pending verification")
+    registry.upsert(feed)
+    registry.save()
+    print(f"added {feed.id} -> {feed.url} (status=unverified)")
+    print(f"run: python -m liver_intel.cli verify --source {args.source}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="liver-intel",
                                      description=__doc__,
@@ -194,6 +228,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--source", help="source id, task id (T1..T8) or feed id")
     p.add_argument("--recheck", action="store_true", help="re-probe verified entries too")
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("preflight", help="check which source hosts are reachable")
+    p.set_defaults(func=cmd_preflight)
+
+    p = sub.add_parser("feeds-add", help="hand-add a candidate endpoint")
+    p.add_argument("--id", required=True)
+    p.add_argument("--url", required=True)
+    p.add_argument("--source", required=True,
+                   help="adapter id: newswire, edgar, fda, ema, cn_regulator, "
+                        "hkex, cninfo, newsroom, pubmed")
+    p.add_argument("--task", help="T1..T8, for traceability")
+    p.add_argument("--kind", default="rss", help="rss | atom | json | html | sitemap | api")
+    p.add_argument("--src-kind", default="company",
+                   help="company | regulator | registry | journal | filing | conference")
+    p.add_argument("--company", help="roster company this feed covers")
+    p.add_argument("--keyword", action="append", help="repeatable")
+    p.add_argument("--note")
+    p.set_defaults(func=cmd_feeds_add)
 
     p = sub.add_parser("status", help="registry, roster coverage and calendar state")
     p.set_defaults(func=cmd_status)

@@ -7,6 +7,7 @@ endpoint verified before use, every graded item backed by quoted source text.
 pip install -e ".[dev]"          # add ".[llm]" for the significance step
 export LIVER_INTEL_CONTACT="you@example.com"   # EDGAR requires a contact UA
 
+python -m liver_intel.cli preflight              # can we reach the sources at all?
 python -m liver_intel.cli status                 # registry / roster / calendar
 python -m liver_intel.cli discover --source newswire
 python -m liver_intel.cli verify   --source T1   # promotes candidates to verified

@@ -9,10 +9,32 @@ repo should be read as "checked against the live service".
 This is the runbook for the first run on a machine with network. Work it in task
 order; each step ends with the acceptance bar from the handover.
 
-Before anything else:
+## Step 0 — can this machine reach the sources at all?
 
 ```bash
 export LIVER_INTEL_CONTACT="you@example.com"   # goes in the User-Agent; EDGAR requires it
+python -m liver_intel.cli preflight
+```
+
+One line per host, fail-fast (no retries — it is a reachability probe). An HTTP
+error counts as reachable: a 404 proves the connection got through, only a
+refused tunnel does not.
+
+If every host reports `blocked` or `unreachable`, that is the environment's
+egress policy and no amount of engine work will fix it. Allow these hosts, then
+start a **new session** — the proxy configuration is injected at container
+start and does not hot-reload:
+
+    www.globenewswire.com   www.businesswire.com   www.prnewswire.com
+    www.sec.gov             data.sec.gov           clinicaltrials.gov
+    api.fda.gov             www.fda.gov            www.accessdata.fda.gov
+    www.ema.europa.eu       www.nmpa.gov.cn        www.cde.org.cn
+    eutils.ncbi.nlm.nih.gov pubmed.ncbi.nlm.nih.gov
+    www.hkexnews.hk         www.cninfo.com.cn
+
+Only once preflight is green does the rest of this runbook mean anything.
+
+```bash
 python -m liver_intel.cli status               # baseline: 0 verified feeds is expected
 ```
 
@@ -28,10 +50,16 @@ python -m liver_intel.cli backfill --since $(date -d '30 days ago' +%F) --source
 ```
 
 1. Autodiscovery finds what the wire advertises in its HTML. Where a wire offers
-   per-organization feeds through a form rather than a link, add the resulting
-   URL to `data/feeds/registry.json` by hand with `"status": "unverified"` and
-   `"company": "<roster name>"`, then re-run `verify` — hand-added URLs go through
-   the same probe as discovered ones.
+   per-organization feeds through a subscription form rather than a link, work
+   the form in a browser, then register what it produced:
+
+   ```bash
+   python -m liver_intel.cli feeds-add --id gnw.madrigal --source newswire --task T1 \
+       --url "<the URL the form produced>" --company "Madrigal Pharmaceuticals"
+   ```
+
+   It lands as `unverified` and goes through exactly the same probe as a
+   discovered one — hand-added is not trusted-added.
 2. Add the keyword fallbacks (`newswire.FALLBACK_KEYWORDS`: hepatitis B, MASH,
    NASH, MASLD, primary biliary cholangitis, hepatocellular carcinoma, cirrhosis,
    hepatitis delta) as keyword feeds on each wire, same way.

@@ -60,6 +60,13 @@ SECTION_NAMES: dict[str, str] = {
     "P2": "最新动态",
 }
 
+#: Hosts the engine talks to that are not themselves registry entries (they are
+#: built from a documented API shape at request time). Used by `preflight`.
+EXTRA_HOSTS: tuple[str, ...] = (
+    "www.accessdata.fda.gov",     # Drugs@FDA application pages (T4)
+    "pubmed.ncbi.nlm.nih.gov",    # article landing pages (T4)
+)
+
 # --- Selection rules (section 0 of the task sheet) -------------------------
 #: P0 is uncapped.  P0+P1+P2 together are capped at this number, which in
 #: practice means P1/P2 fill the slots P0 leaves behind.  When P0 alone exceeds
