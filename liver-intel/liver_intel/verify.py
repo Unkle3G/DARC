@@ -23,6 +23,11 @@ _DATE_KEYS = ("published", "updated", "pubDate", "date", "lastBuildDate",
               "dateTime", "created", "releaseDate", "filingDate", "lastmod")
 
 
+def _brief(exc: Exception, limit: int = 200) -> str:
+    text = str(exc).replace("\n", " ")
+    return text if len(text) <= limit else text[:limit] + "..."
+
+
 @dataclass
 class VerifyResult:
     feed: Feed
@@ -96,8 +101,11 @@ def verify_feed(feed: Feed, fetcher: Fetcher) -> VerifyResult:
                      "keep watching this source.")
         return VerifyResult(feed, False, str(exc))
     except Exception as exc:
-        feed.status = "dead"
-        feed.note = f"unreachable: {exc}"
+        # A transport failure (DNS, proxy, timeout) says nothing about the
+        # endpoint -- only that we could not reach it from here. Recording it as
+        # dead would read as "this URL is wrong", a different claim entirely.
+        feed.status = "unreachable"
+        feed.note = f"could not be reached from this host: {_brief(exc)}"
         return VerifyResult(feed, False, str(exc))
 
     feed.http_status = response.status

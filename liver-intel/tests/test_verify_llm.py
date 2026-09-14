@@ -178,3 +178,21 @@ def test_claude_judge_survives_an_api_failure():
                 meta={"src_kind": "company"})
     result = ClaudeJudge(client=Boom()).judge(item, SOURCE)
     assert result.signals == [] and "llm call failed" in result.dropped[0]
+
+
+def test_transport_failure_is_unreachable_not_dead(fake_fetcher):
+    """A proxy/DNS failure must not be recorded as a bad endpoint."""
+    fake_fetcher.routes[feed().url] = ConnectionError("Tunnel connection failed")
+    result = verify_feed(feed(), fake_fetcher)
+    assert result.feed.status == "unreachable"
+    assert "could not be reached" in result.feed.note
+
+
+def test_unreachable_entries_are_reprobed_next_run(fake_fetcher):
+    registry = Registry(entries=[feed(status="unreachable")])
+    assert registry.usable(source="newswire") == []
+    fake_fetcher.add(feed().url,
+                     "<rss><channel><item><title>a</title>"
+                     "<pubDate>Mon, 14 Sep 2026 08:00:00 GMT</pubDate></item></channel></rss>")
+    verify_registry(registry, fake_fetcher)
+    assert registry.entries[0].status == "verified"

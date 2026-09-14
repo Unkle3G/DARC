@@ -10,6 +10,8 @@ The registry is a JSON file of *candidates*.  Each entry carries a ``status``:
 ``unverified``     a candidate URL that has never been probed
 ``verified``       probed: reachable, parseable, carries a usable date field
 ``dead``           probed and unusable (404, no date field, no items)
+``unreachable``    could not be probed at all (DNS, proxy, timeout) -- says nothing
+                   about the endpoint itself, so the next run retries it
 ``blocked``        probed and refused (403/451) -- an operator decision, not a retry
 
 :func:`usable` is what the collectors call, and it returns ``verified`` entries
@@ -25,7 +27,8 @@ from typing import Any, Iterable
 
 from .config import FEED_REGISTRY
 
-STATUSES = ("discover_root", "unverified", "verified", "dead", "blocked")
+STATUSES = ("discover_root", "unverified", "verified", "dead", "unreachable",
+            "blocked")
 
 
 @dataclass
