@@ -76,7 +76,7 @@ def test_daily_run_produces_a_graded_report(wired):
     assert any("Ascletis" in i.title for i in result.weekly)
 
     body = result.report_path.read_text(encoding="utf-8")
-    assert "# 肝病情报日报 2026-09-14" in body
+    assert "HepaDaily 内部日报 2026-09-14" in body
     assert madrigal.url in body
     assert "L3" in body
 
@@ -98,7 +98,7 @@ def test_weekly_digest_drains_the_pool(wired):
     weekly = pipeline.run_weekly(wired, today="2026-09-18")
     assert weekly.weekly, "auxiliary-line items should have reached the pool"
     body = weekly.report_path.read_text(encoding="utf-8")
-    assert "肝病情报周汇总" in body
+    assert "HepaDaily 内部周汇总" in body
     # draining is idempotent: a second Friday run does not re-issue the same items
     again = pipeline.run_weekly(wired, today="2026-09-25")
     assert again.weekly == []

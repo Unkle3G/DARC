@@ -48,6 +48,18 @@ RATE_LIMITS: dict[str, float] = {
 #: retried aggressively: on a block we downgrade to a manual prompt (section T4).
 CN_LIST_MAX_ATTEMPTS = 2
 
+# --- Branding and reader-facing labels ------------------------------------
+#: Product name. Provisional per the operator's instruction.
+BRAND = os.environ.get("LIVER_INTEL_BRAND", "HepaDaily")
+
+#: P0/P1/P2 are internal triage grades and are never shown to readers. The
+#: reader-facing article uses these section names instead.
+SECTION_NAMES: dict[str, str] = {
+    "P0": "今日头条",
+    "P1": "前沿速览",
+    "P2": "最新动态",
+}
+
 # --- Selection rules (section 0 of the task sheet) -------------------------
 #: P0 is uncapped.  P0+P1+P2 together are capped at this number, which in
 #: practice means P1/P2 fill the slots P0 leaves behind.  When P0 alone exceeds

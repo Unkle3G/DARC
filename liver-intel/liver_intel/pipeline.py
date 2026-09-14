@@ -9,7 +9,7 @@ from typing import Iterable
 
 from . import grade as grading
 from . import images as image_tools
-from . import llm, report, report_wechat, select
+from . import llm, people as people_tools, report, report_wechat, select
 from .conference import Calendar
 from .config import Settings
 from .domain_map import DomainMap, load as load_domain_map
@@ -90,6 +90,13 @@ def enrich(items: Iterable[Item], ctx: Context, judge: llm.Judge,
         grading.apply(item, dm=ctx.domain_map, today=ctx.today,
                       extra_signals=item.evidence.signals)
         _attach_rule_evidence(item, source_text, tagger)
+        if not item.meta.get("contributors"):
+            # No byline (company release, filing, registry record): record the
+            # issuing body so the materials library still has provenance.
+            found = people_tools.issuer_contributors(
+                item.meta, str(item.meta.get("body") or ""))
+            if found:
+                item.meta["contributors"] = found
         out.append(item)
     return out
 
@@ -151,6 +158,10 @@ def run_daily(settings: Settings, today: str | None = None, since: str | None = 
                 store.mark_seen(item, published_on=today)
             for item in selection.weekly:
                 store.mark_seen(item)
+            # The materials library keeps everything collected, not just what
+            # shipped: the point is later retrieval and roll-ups.
+            recorded = sum(store.record_contributors(item) for item in items)
+            stats["contributors"] = recorded
 
             result.daily = selection.daily
             result.weekly = selection.weekly

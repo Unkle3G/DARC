@@ -66,6 +66,28 @@ CREATE TABLE IF NOT EXISTS weekly_pool (
     drained_on TEXT
 );
 
+-- Materials library: who published what. Position 1 is the first author, 2 the
+-- second, and so on; 0 marks a non-authored contributor (issuing company, press
+-- contact). Kept for later retrieval and roll-ups, never shown to readers.
+CREATE TABLE IF NOT EXISTS contributors (
+    item_key    TEXT NOT NULL,
+    position    INTEGER NOT NULL,
+    name        TEXT NOT NULL,
+    affiliation TEXT,
+    role        TEXT,
+    orcid       TEXT,
+    item_title  TEXT,
+    item_url    TEXT,
+    item_date   TEXT,
+    publisher   TEXT,
+    src         TEXT,
+    recorded    TEXT NOT NULL,
+    PRIMARY KEY (item_key, position, name)
+);
+CREATE INDEX IF NOT EXISTS contributors_name_idx ON contributors(name);
+CREATE INDEX IF NOT EXISTS contributors_affil_idx ON contributors(affiliation);
+CREATE INDEX IF NOT EXISTS contributors_date_idx ON contributors(item_date);
+
 CREATE TABLE IF NOT EXISTS runs (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     started   TEXT NOT NULL,
@@ -255,6 +277,85 @@ class Store:
             )
             self.conn.commit()
         return items
+
+    # ---- contributors (materials library) -------------------------------
+    def record_contributors(self, item: Item) -> int:
+        """Persist ``meta.contributors`` for later retrieval.
+
+        Expected shape per entry: ``{position, name, affiliation, role, orcid}``.
+        Position 1 is the first author; 0 means the contributor is not an author
+        (an issuing company, a media contact).
+        """
+        people = item.meta.get("contributors") or []
+        if not people:
+            return 0
+        now = _now()
+        publisher = (item.meta.get("journal") or item.meta.get("regulator")
+                     or item.meta.get("venue") or item.meta.get("wire") or "")
+        rows = []
+        for entry in people:
+            name = str(entry.get("name") or "").strip()
+            if not name:
+                continue
+            rows.append((
+                item.key, int(entry.get("position") or 0), name,
+                (entry.get("affiliation") or "").strip() or None,
+                entry.get("role") or "author",
+                entry.get("orcid") or None,
+                item.title, item.url, item.date, publisher, item.src, now,
+            ))
+        if not rows:
+            return 0
+        self.conn.executemany(
+            """
+            INSERT INTO contributors (item_key, position, name, affiliation, role,
+                orcid, item_title, item_url, item_date, publisher, src, recorded)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(item_key, position, name) DO UPDATE SET
+                affiliation=COALESCE(excluded.affiliation, contributors.affiliation),
+                role=excluded.role, orcid=COALESCE(excluded.orcid, contributors.orcid)
+            """,
+            rows,
+        )
+        self.conn.commit()
+        return len(rows)
+
+    def contributors(self, since: str | None = None, name: str | None = None,
+                     affiliation: str | None = None, first_only: bool = False,
+                     limit: int = 200) -> list[sqlite3.Row]:
+        clauses, params = [], []
+        if since:
+            clauses.append("item_date >= ?")
+            params.append(since)
+        if name:
+            clauses.append("name LIKE ?")
+            params.append(f"%{name}%")
+        if affiliation:
+            clauses.append("affiliation LIKE ?")
+            params.append(f"%{affiliation}%")
+        if first_only:
+            clauses.append("position = 1")
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        return self.conn.execute(
+            f"SELECT * FROM contributors {where} ORDER BY item_date DESC, "
+            f"item_key, position LIMIT ?", params).fetchall()
+
+    def contributor_summary(self, since: str | None = None, limit: int = 50
+                            ) -> list[sqlite3.Row]:
+        """Roll-up for the materials library: who appears most, and where."""
+        where, params = ("WHERE item_date >= ?", [since]) if since else ("", [])
+        params.append(limit)
+        return self.conn.execute(
+            f"""
+            SELECT name,
+                   COUNT(*) AS items,
+                   SUM(CASE WHEN position = 1 THEN 1 ELSE 0 END) AS first_author,
+                   MAX(item_date) AS latest,
+                   MAX(affiliation) AS affiliation
+            FROM contributors {where}
+            GROUP BY name ORDER BY items DESC, latest DESC LIMIT ?
+            """, params).fetchall()
 
     # ---- run bookkeeping ------------------------------------------------
     @contextmanager

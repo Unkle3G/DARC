@@ -12,6 +12,7 @@ from typing import Any, Iterable
 from urllib.parse import urlencode
 
 from ..models import Item, as_iso_date
+from ..people import authors_from_pubmed_xml
 from ..textutil import clip
 from .base import BaseSource, Context
 
@@ -19,6 +20,7 @@ log = logging.getLogger(__name__)
 
 FEED_ID = "pubmed.esummary"
 ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+EFETCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 
 QUERY_TERMS = (
     '"hepatitis B"[Title/Abstract]', '"hepatitis D"[Title/Abstract]',
@@ -77,13 +79,36 @@ class PubmedSource(BaseSource):
         except json.JSONDecodeError:
             return []
 
+        # esummary carries names but no affiliations; the materials library
+        # needs the affiliation, so authorship comes from efetch.
+        authorship = self._authorship(ctx, ids)
+
         out: list[Item] = []
         for pmid in payload.get("uids", []) or []:
             record = payload.get(pmid) or {}
             item = self._to_item(ctx, pmid, record)
-            if item is not None:
-                out.append(item)
+            if item is None:
+                continue
+            people = authorship.get(str(pmid))
+            if people:
+                item.meta["contributors"] = people
+                item.meta["first_author"] = people[0]["name"]
+                if people[0].get("affiliation"):
+                    item.meta["first_author_affiliation"] = people[0]["affiliation"]
+            out.append(item)
         return self.emit(ctx, out)
+
+    def _authorship(self, ctx: Context, ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        url = f"{EFETCH}?{urlencode({'db': 'pubmed', 'id': ','.join(ids), 'retmode': 'xml'})}"
+        try:
+            response = ctx.fetcher.get(url, allow_304=False)
+        except Exception as exc:
+            ctx.note(f"[{self.id}] efetch failed, authors not recorded: {exc}")
+            return {}
+        if not response.ok:
+            ctx.note(f"[{self.id}] efetch HTTP {response.status}, authors not recorded")
+            return {}
+        return authors_from_pubmed_xml(response.text)
 
     def _to_item(self, ctx: Context, pmid: str, record: dict[str, Any]) -> Item | None:
         title = (record.get("title") or "").strip()

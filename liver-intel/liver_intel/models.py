@@ -58,8 +58,10 @@ class Quote:
     text: str
     url: str = ""
     locator: str = ""          # e.g. "EX-99.1 para 3", "whyStopped"
-    lang: str = ""             # "zh" for Chinese source spans
-    translation: str = ""      # translation only, never gloss or background
+    lang: str = ""             # source language of ``text``: "zh", "en", ...
+    #: Chinese rendering of a non-Chinese quote. Empty for Chinese sources, and
+    #: empty when no model ran -- the engine never invents a translation.
+    translation: str = ""
 
     def to_json(self) -> dict[str, Any]:
         out = {"text": self.text}
@@ -219,6 +221,21 @@ def validate_quotes(item: Item, source_text: str) -> list[Quote]:
 
 def _normalise_ws(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "")).strip()
+
+
+_CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+
+
+def is_chinese(text: str) -> bool:
+    """True when the span is predominantly Chinese.
+
+    Used to decide whether a quote needs a translation for a Chinese-reading
+    audience; a stray Chinese character in an English sentence must not count.
+    """
+    stripped = re.sub(r"\s", "", text or "")
+    if not stripped:
+        return False
+    return len(_CJK.findall(stripped)) / len(stripped) >= 0.2
 
 
 def today_iso(tz: str | None = None) -> str:

@@ -143,6 +143,42 @@ def cmd_backfill(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_authors(args: argparse.Namespace) -> int:
+    """Query the materials library (backend only, never reader-facing)."""
+    settings = _settings(args)
+    with Store(settings.db_path) as store:
+        if args.summary:
+            rows = store.contributor_summary(since=args.since, limit=args.limit)
+            if not rows:
+                print("materials library is empty")
+                return 0
+            print(f"{'name':32s} {'items':>5s} {'1st':>4s}  {'latest':10s} affiliation")
+            for row in rows:
+                print(f"{row['name'][:32]:32s} {row['items']:5d} "
+                      f"{row['first_author']:4d}  {row['latest'] or '':10s} "
+                      f"{(row['affiliation'] or '')[:50]}")
+            return 0
+
+        rows = store.contributors(since=args.since, name=args.name,
+                                  affiliation=args.affiliation,
+                                  first_only=args.first_only, limit=args.limit)
+        if not rows:
+            print("no contributor matched")
+            return 0
+        for row in rows:
+            position = "第一作者" if row["position"] == 1 else (
+                f"第{row['position']}作者" if row["position"] else row["role"] or "机构")
+            print(f"{row['item_date']}  {position:8s} {row['name']}")
+            if row["affiliation"]:
+                print(f"{'':12s}单位：{row['affiliation']}")
+            if row["publisher"]:
+                print(f"{'':12s}出处：{row['publisher']}")
+            print(f"{'':12s}{row['item_title'][:70]}")
+            print(f"{'':12s}{row['item_url']}")
+        print(f"\n{len(rows)} record(s)")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="liver-intel",
                                      description=__doc__,
@@ -183,6 +219,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int)
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=cmd_weekly)
+
+    p = sub.add_parser("authors", help="query the contributor materials library")
+    p.add_argument("--since", help="ISO date lower bound")
+    p.add_argument("--name", help="substring match on contributor name")
+    p.add_argument("--affiliation", help="substring match on affiliation")
+    p.add_argument("--first-only", action="store_true", help="first authors only")
+    p.add_argument("--summary", action="store_true",
+                   help="roll-up by contributor instead of a record list")
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_authors)
 
     p = sub.add_parser("backfill", help="historical sweep for acceptance testing")
     p.add_argument("--since")

@@ -96,6 +96,40 @@ meant L13 to bypass the main-line gate as well, change `select.has_main_line`.
 - **Tagger vocabulary:** `tagger.STUDY_PATTERNS` for layer 2; layers 1 and 3 read
   the dictionary.
 
+## Reader-facing vs internal
+
+The two outputs are deliberately different documents.
+
+| | 公众号 article (`*_wechat.html`) | internal report (`*.md` / `*.json`) |
+| --- | --- | --- |
+| Grades | never shown — sections read 今日头条 / 前沿速览 / 最新动态 (`config.SECTION_NAMES`) | P0/P1/P2 |
+| Line ids, signal names, adapter ids, score | never shown | all present |
+| Per-entry labels | searchable keywords (`keywords.py`) | 线路 / 来源 / 研究标签 / 命中信号 |
+| Sourcing note and links | one reference list at the end, links clickable | inline per entry |
+| Operator notes | never rendered | printed under 运行提示 |
+| Brand | `config.BRAND` = HepaDaily | same |
+
+Quotes keep the source language in both. A non-Chinese quote is followed by its
+Chinese rendering marked 编者译，仅供参考; a Chinese quote is shown as written and
+never translated. When no model ran there is no translation, and the original
+stands alone — the engine does not invent one.
+
+## Materials library (backend only)
+
+Every collected item's contributors go into the `contributors` table: authors in
+order (position 1 = first author) with affiliation and ORCID for journal records,
+and the issuing company, sponsor, regulator or media contact at position 0 for
+documents with no byline. PubMed authorship comes from an `efetch` call, because
+`esummary` carries names but not affiliations.
+
+```bash
+python -m liver_intel.cli authors --summary            # roll-up by contributor
+python -m liver_intel.cli authors --first-only --since 2026-09-01
+python -m liver_intel.cli authors --affiliation "Capital Medical"
+```
+
+Nothing from this table is ever rendered into an article.
+
 ## 公众号 output
 
 `daily --wechat` writes `out/liver_daily_<date>_wechat.html` alongside the

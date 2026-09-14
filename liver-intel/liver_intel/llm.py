@@ -37,10 +37,14 @@ states, and quote the exact sentence(s) that state each one.
 
 Rules:
 - Quote verbatim from the document. Never paraphrase inside `text`. Copy the \
-characters exactly, including punctuation.
-- If the document is in Chinese, keep `text` in the original Chinese and put a \
-literal translation in `translation`. Translate only what is written: add no \
-background, no explanation, no interpretation.
+characters exactly, including punctuation. `text` is always in the document's \
+own language.
+- The audience reads Chinese. If the document is NOT in Chinese, put a literal \
+Chinese translation of the quote in `translation`, and set `lang` to the source \
+language ("en", "ja", ...). If the document IS in Chinese, leave `translation` \
+empty and set `lang` to "zh" -- do not translate Chinese into anything.
+- Translate only what is written: add no background, no explanation, no \
+interpretation, no terminology gloss.
 - Report only what the document itself states. Do not use outside knowledge \
 about the company, the drug or the field.
 - Do not predict, evaluate, rank, or describe anything as positive, negative, \

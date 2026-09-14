@@ -100,6 +100,15 @@ def main() -> int:
 
     daily = pipeline.run_daily(settings, today="2026-09-14", only=["newswire"],
                                wechat=True)
+
+    # The English entries have no Chinese rendering in a rules-only run (no model
+    # ran), so stamp one in by hand to show what the translated form looks like.
+    for item in daily.daily:
+        for quote in item.evidence.quotes:
+            if quote.text.startswith("Madrigal Pharmaceuticals today announced"):
+                quote.lang = "en"
+                quote.translation = ("Madrigal 今日宣布，其 MAESTRO-NASH 三期试验达到"
+                                     "主要终点，即 F2-F3 纤维化患者经肝活检确认的 MASH 缓解。")
     print(f"collected {daily.collected} | daily {len(daily.daily)} {daily.counts} "
           f"| weekly pool +{len(daily.weekly)}\n")
     print(daily.report_path.read_text(encoding="utf-8"))

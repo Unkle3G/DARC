@@ -17,6 +17,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Iterable
 
+from .config import BRAND
 from .domain_map import DomainMap
 from .grade import SIGNALS
 from .models import Item
@@ -114,7 +115,7 @@ def daily_markdown(items: list[Item], report_date: str, dm: DomainMap,
     coverage = (f"覆盖 {start} 至 {end}" if start != end
                 else f"覆盖 {end}")
     head = [
-        f"# 肝病情报日报 {report_date}（{weekday}，{coverage}）",
+        f"# {BRAND} 内部日报 {report_date}（{weekday}，{coverage}）",
         "",
         f"> 本期 {' / '.join(f'{p} {counts[p]} 条' for p in sorted(counts)) or '无条目'}"
         f"；转入周汇总 {weekly_pool_size} 条。",
@@ -157,7 +158,7 @@ def weekly_markdown(items: list[Item], report_date: str, dm: DomainMap,
     day = date.fromisoformat(report_date)
     start = (day - timedelta(days=4)).isoformat()
     head = [
-        f"# 肝病情报周汇总 {report_date}（覆盖 {start} 至 {report_date}）",
+        f"# {BRAND} 内部周汇总 {report_date}（覆盖 {start} 至 {report_date}）",
         "",
         f"> 收录本周未进入每日报的条目，共 {len(items)} 条"
         f"（P2 {sum(1 for i in items if i.P == 'P2')} 条 / "
