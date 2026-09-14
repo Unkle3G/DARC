@@ -1,0 +1,40 @@
+{
+  "note": "T6 conference calendar. Dates MUST be confirmed against each society's own site before use. Entries with \"verified\": false are inert: liver_intel.conference refuses to change collection frequency or tag items from them, and every run prints a reminder. The 2026 AASLD meeting dates and late-breaker release date were explicitly left to be looked up (handover T6); this session had no network access, so nothing was filled in from memory.",
+  "boost_days_before": 2,
+  "boost_days_after": 2,
+  "conferences": [
+    {
+      "id": "EASL2026",
+      "name": "EASL Congress 2026",
+      "society": "EASL",
+      "start": null,
+      "end": null,
+      "late_breaker_release": null,
+      "verified": false,
+      "source_url": null,
+      "note": "Fill start/end and the late-breaker abstract release date from the EASL congress site, then set verified=true."
+    },
+    {
+      "id": "AASLD2026",
+      "name": "AASLD The Liver Meeting 2026",
+      "society": "AASLD",
+      "start": null,
+      "end": null,
+      "late_breaker_release": null,
+      "verified": false,
+      "source_url": null,
+      "note": "Handover T6 calls this out specifically: look up the 2026 meeting dates and the late-breaker release date, then set verified=true."
+    },
+    {
+      "id": "APASL2026",
+      "name": "APASL Annual Meeting 2026",
+      "society": "APASL",
+      "start": null,
+      "end": null,
+      "late_breaker_release": null,
+      "verified": false,
+      "source_url": null,
+      "note": "Fill from the APASL meeting site, then set verified=true."
+    }
+  ]
+}

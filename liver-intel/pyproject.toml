@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "liver-intel"
+version = "1.0.0"
+description = "Liver-disease intelligence engine: first-party sources only, verified endpoints, evidence-backed grading"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "feedparser>=6.0",
+]
+
+[project.optional-dependencies]
+# The significance step is optional: without it the engine grades on
+# deterministic rules alone.
+llm = ["anthropic>=0.40"]
+dev = ["pytest>=8", "pyflakes>=3"]
+
+[project.scripts]
+liver-intel = "liver_intel.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["liver_intel*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

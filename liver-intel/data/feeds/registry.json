@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "note": "Seeded with discovery roots and documented API bases only. No deep feed URL is written from memory (handover section 3): run `liver-intel discover` to find candidates and `liver-intel verify` to promote them to status=verified. Collectors refuse anything not verified.",
+  "entries": [
+    {"id": "globenewswire.root", "url": "https://www.globenewswire.com/", "task": "T1",
+     "source": "newswire", "kind": "discover_root", "src_kind": "company", "status": "discover_root",
+     "note": "Look for per-organization and per-keyword RSS. Verify each candidate carries a date field before use."},
+    {"id": "businesswire.root", "url": "https://www.businesswire.com/", "task": "T1",
+     "source": "newswire", "kind": "discover_root", "src_kind": "company", "status": "discover_root"},
+    {"id": "prnewswire.root", "url": "https://www.prnewswire.com/", "task": "T1",
+     "source": "newswire", "kind": "discover_root", "src_kind": "company", "status": "discover_root"},
+
+    {"id": "sec.submissions", "url": "https://data.sec.gov/submissions/", "task": "T2",
+     "source": "edgar", "kind": "api", "src_kind": "filing", "status": "unverified",
+     "note": "EDGAR submissions JSON base; CIK resolved via https://www.sec.gov/files/company_tickers.json. Requires a contact User-Agent and <=10 req/s."},
+    {"id": "sec.company_tickers", "url": "https://www.sec.gov/files/company_tickers.json", "task": "T2",
+     "source": "edgar", "kind": "json", "src_kind": "filing", "status": "unverified"},
+
+    {"id": "ctgov.v2", "url": "https://clinicaltrials.gov/api/v2/studies", "task": "T3",
+     "source": "ctgov", "kind": "api", "src_kind": "registry", "status": "unverified",
+     "note": "Already wired in the previous version; kept unverified until this engine probes it itself."},
+
+    {"id": "openfda.drugsfda", "url": "https://api.fda.gov/drug/drugsfda.json", "task": "T4",
+     "source": "fda", "kind": "api", "src_kind": "regulator", "status": "unverified"},
+    {"id": "fda.root", "url": "https://www.fda.gov/", "task": "T4",
+     "source": "fda", "kind": "discover_root", "src_kind": "regulator", "status": "discover_root",
+     "note": "Press-release RSS and advisory-committee calendar must be discovered and verified. The previous version's FDA RSS URL was invented and 404'd."},
+    {"id": "ema.root", "url": "https://www.ema.europa.eu/en", "task": "T4",
+     "source": "ema", "kind": "discover_root", "src_kind": "regulator", "status": "discover_root",
+     "note": "CHMP post-meeting highlights are published monthly; find the live listing page, do not assume a path."},
+    {"id": "nmpa.root", "url": "https://www.nmpa.gov.cn/", "task": "T4",
+     "source": "cn_regulator", "kind": "discover_root", "src_kind": "regulator", "status": "discover_root",
+     "note": "List-page hash diffing, once daily. On a block, downgrade to a manual prompt rather than retrying."},
+    {"id": "cde.root", "url": "https://www.cde.org.cn/", "task": "T4",
+     "source": "cn_regulator", "kind": "discover_root", "src_kind": "regulator", "status": "discover_root",
+     "note": "Acceptance list, priority review, breakthrough therapy and approval notices."},
+
+    {"id": "hkex.root", "url": "https://www.hkexnews.hk/", "task": "T5",
+     "source": "hkex", "kind": "discover_root", "src_kind": "filing", "status": "discover_root"},
+    {"id": "cninfo.root", "url": "http://www.cninfo.com.cn/", "task": "T5",
+     "source": "cninfo", "kind": "discover_root", "src_kind": "filing", "status": "discover_root"},
+
+    {"id": "pubmed.esummary", "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+     "task": "T4", "source": "pubmed", "kind": "api", "src_kind": "journal", "status": "unverified",
+     "note": "sortpubdate can be a future ahead-of-print date; items are archived by collection date (handover section 3)."}
+  ]
+}

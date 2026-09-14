@@ -1,0 +1,113 @@
+import pytest
+
+from liver_intel import grade
+from liver_intel.models import Item
+from liver_intel.tagger import Tagger
+
+
+@pytest.fixture
+def tagger(domain_map):
+    return Tagger(domain_map)
+
+
+def item(title, src_kind="company", **meta):
+    return Item(src="s", title=title, url="https://www.example.com/a",
+                date="2026-09-14", meta={"src_kind": src_kind, **meta})
+
+
+# --- layer 1: lines -------------------------------------------------------
+def test_hcc_fires_on_an_unambiguous_name(tagger):
+    lines, gated = tagger.tag_lines("Phase 3 study in hepatocellular carcinoma after TACE")
+    assert "L6" in lines and not gated
+
+
+def test_hcc_gate_blocks_a_pan_tumour_namedrop(tagger):
+    lines, gated = tagger.tag_lines(
+        "Our PD-1 antibody is studied in NSCLC, RCC, HCC and melanoma")
+    assert "L6" not in lines
+    assert "L6" in gated
+
+
+def test_hcc_abbreviation_passes_with_liver_context(tagger):
+    lines, _ = tagger.tag_lines("Second-line HCC therapy in Child-Pugh A cirrhosis")
+    assert "L6" in lines
+
+
+def test_cirrhosis_fallback(tagger):
+    lines, _ = tagger.tag_lines("Patient with compensated cirrhosis and ascites")
+    assert "L5" in lines
+
+
+def test_chinese_phase_three_does_not_fire_phase_one(tagger):
+    study = tagger.tag_study("该方案III期临床达到主要终点")
+    assert "PHASE3" in study
+    assert "PHASE1" not in study and "PHASE2" not in study
+
+
+def test_unverified_kols_are_not_matched(domain_map):
+    conservative = Tagger(domain_map)
+    permissive = Tagger(domain_map, use_unverified_kols=True)
+    text = "A study presented by PLACEHOLDER-CN-1 and Rohit Loomba"
+    assert conservative.tag_text(text).kols == ["Rohit Loomba"]
+    assert "PLACEHOLDER-CN-1" in permissive.tag_text(text).kols
+
+
+# --- grading --------------------------------------------------------------
+def test_phase3_readout_is_p0(tagger, domain_map):
+    i = tagger.apply(item("Phase 3 MASH trial met the primary endpoint on liver biopsy"))
+    result = grade.grade(i, domain_map, today="2026-09-14")
+    assert result.P == "P0" and "PH3_RESULT" in result.signals
+
+
+def test_phase3_termination_with_reason_is_p0(tagger, domain_map):
+    i = tagger.apply(item("Phase 3 cirrhosis trial terminated", src_kind="registry",
+                          why_stopped="sponsor decision after futility analysis"))
+    result = grade.grade(i, domain_map, today="2026-09-14")
+    assert result.P == "P0" and "PH3_STOPPED" in result.signals
+
+
+def test_phase3_termination_without_reason_is_not_p0(tagger, domain_map):
+    i = tagger.apply(item("Phase 3 cirrhosis trial terminated", src_kind="registry"))
+    result = grade.grade(i, domain_map, today="2026-09-14")
+    assert "PH3_STOPPED" not in result.signals
+
+
+def test_phase2_readout_is_p1(tagger, domain_map):
+    i = tagger.apply(item("Phase 2b MASH study did not meet the primary endpoint"))
+    assert grade.grade(i, domain_map, today="2026-09-14").P == "P1"
+
+
+def test_auxiliary_only_item_is_capped_to_p2(tagger, domain_map):
+    i = tagger.apply(item(
+        "Phase 3 hepatitis C trial met the primary endpoint of sustained virologic response"))
+    result = grade.grade(i, domain_map, today="2026-09-14")
+    assert i.lines == ["L9"]
+    assert result.P == "P2"
+    assert any("auxiliary-only" in note for note in result.notes)
+
+
+def test_auxiliary_plus_main_line_keeps_p0(tagger, domain_map):
+    i = tagger.apply(item("Phase 3 hepatitis C trial in patients with cirrhosis "
+                          "met the primary endpoint"))
+    assert grade.grade(i, domain_map, today="2026-09-14").P == "P0"
+
+
+def test_l13_has_full_weight_but_stays_auxiliary(domain_map):
+    assert domain_map.line_weight("L13") == 1.0
+    assert not domain_map.lines["L13"].is_main
+
+
+def test_main_line_outscores_the_same_news_on_an_aux_line(tagger, domain_map):
+    main = tagger.apply(item("Phase 3 MASH trial met the primary endpoint"))
+    aux = tagger.apply(item("Phase 3 hepatitis C trial met the primary endpoint"))
+    grade.apply(main, domain_map, today="2026-09-14")
+    grade.apply(aux, domain_map, today="2026-09-14")
+    assert main.score > aux.score
+
+
+def test_why_is_factual_not_evaluative(tagger, domain_map):
+    from liver_intel.llm import assert_not_evaluative
+
+    i = tagger.apply(item("Phase 3 MASH trial met the primary endpoint"))
+    result = grade.grade(i, domain_map, today="2026-09-14")
+    assert_not_evaluative(result.why, "grade.why")
