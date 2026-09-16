@@ -82,14 +82,23 @@ def enrich(items: Iterable[Item], ctx: Context, judge: llm.Judge,
         tagger.apply(item)
         if ctx.conference_window:
             item.meta["conference"] = ctx.conference_window["name"]
+        # Only text the source itself published may be quoted as evidence. An
+        # adapter that synthesises a readable body (the registry one does) puts
+        # the genuine part in meta["quotable"]; without that the body is the
+        # fetched document and is quotable as it stands.
         source_text = "\n".join(filter(None, [
             item.title, str(item.meta.get("body") or ""),
             str(item.meta.get("summary") or ""),
         ]))
-        llm.apply(item, source_text, judge)
+        quotable = "\n".join(filter(None, [
+            item.title,
+            str(item.meta.get("quotable") or item.meta.get("body") or ""),
+            str(item.meta.get("summary") or ""),
+        ]))
+        llm.apply(item, quotable, judge)
         grading.apply(item, dm=ctx.domain_map, today=ctx.today,
                       extra_signals=item.evidence.signals)
-        _attach_rule_evidence(item, source_text, tagger)
+        _attach_rule_evidence(item, quotable, tagger)
         if not item.meta.get("contributors"):
             # No byline (company release, filing, registry record): record the
             # issuing body so the materials library still has provenance.

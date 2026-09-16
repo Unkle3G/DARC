@@ -69,8 +69,17 @@ STUDY_PATTERNS: list[tuple[str, Sequence[str], Sequence[str]]] = [
                   r"\bnda approval\b", r"granted approval",
                   r"\b(?:fda|ema|nmpa|chmp|pmda|mhra)\s+approval\b"],
      ["获批", "批准上市", "上市许可", "批准注册"]),
-    ("SUBMISSION", [r"\bnda\b", r"\bbla\b", r"\bmaa\b", r"\bsnda\b", r"submitted an application",
-                    r"regulatory submission", r"\bind\b"],
+    # A bare application id ("IND 152626") is a *mention*, and mentions appear in
+    # withdrawals as often as in filings -- a real registry entry read
+    # "requests the permanent discontinuation and withdrawal of Investigational
+    # New Drug application IND 152626" and the bare-id pattern reported it as a
+    # filing. So the act has to be present, and WITHDRAWAL_CONTEXT below vetoes
+    # the tag when the same sentence is about taking an application back.
+    ("SUBMISSION", [r"(?:submit\w*|filed?|filing|accept\w*)\s+(?:\w+\s+){0,4}"
+                    r"(?:\bnda\b|\bbla\b|\bmaa\b|\bsnda\b|\bind\b|application)",
+                    r"(?:\bnda\b|\bbla\b|\bmaa\b|\bsnda\b|\bind\b)\s+(?:\w+\s+){0,3}"
+                    r"(?:was |has been )?(?:submitted|filed|accepted)",
+                    r"regulatory submission", r"marketing application"],
      ["上市申请", "新药申请", "受理", "申报", "临床试验申请"]),
     ("CRL", [r"complete response letter", r"\bcrl\b", r"refuse to file"], ["完整回复函"]),
     ("DESIGNATION", [r"breakthrough therapy", r"fast track", r"orphan drug", r"priority review",
@@ -90,6 +99,11 @@ STUDY_PATTERNS: list[tuple[str, Sequence[str], Sequence[str]]] = [
     ("REAL_WORLD", [r"real-world evidence", r"real-world data", r"registry cohort"],
      ["真实世界"]),
 ]
+
+#: A sentence about taking an application back must not read as a filing.
+WITHDRAWAL_CONTEXT = re.compile(
+    r"(?i)\b(?:withdraw\w*|discontinu\w*|terminat\w*|rescind\w*|revoke\w*)\b"
+    r"|撤回|撤销|终止")
 
 #: Phrases that show up in drug naming; used to lift a compound name out of a
 #: headline when the release does not carry structured metadata.
@@ -201,11 +215,26 @@ class Tagger:
 
     # -- layer 2 ---------------------------------------------------------
     def tag_study(self, text: str) -> list[str]:
-        tags = [tag for tag, pattern in self._study if pattern.search(text)]
+        tags = []
+        for tag, pattern in self._study:
+            match = pattern.search(text)
+            if not match:
+                continue
+            if tag == "SUBMISSION" and self._is_withdrawal(text, match.start()):
+                continue
+            tags.append(tag)
         # An explicit endpoint verdict makes the generic TOPLINE tag redundant
         # only when it disagrees with nothing; keep both, they carry different
         # information for the grader.
         return tags
+
+    @staticmethod
+    def _is_withdrawal(text: str, position: int) -> bool:
+        """True when the sentence around ``position`` is about withdrawing."""
+        start = max(0, text.rfind(".", 0, position) + 1)
+        end = text.find(".", position)
+        sentence = text[start: end if end != -1 else len(text)]
+        return bool(WITHDRAWAL_CONTEXT.search(sentence))
 
     # -- layer 3 ---------------------------------------------------------
     def tag_entities(self, text: str) -> tuple[list[Company], list[str], list[Kol]]:

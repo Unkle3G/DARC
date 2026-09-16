@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Iterable
 
-from ..models import Item, as_iso_date
+from ..models import Item, Quote, as_iso_date
 from ..store import NctState
 from .base import BaseSource, Context
 
@@ -153,6 +153,10 @@ class CtGovSource(BaseSource):
                 "last_update_posted": current.last_update_posted,
                 "results_first_posted": current.results_first_posted,
                 "state_changes": change_text,
+                # ``body`` feeds the tagger and carries engine-written scaffolding
+                # ("Phase: PHASE3"). ``quotable`` is only what the registry itself
+                # published, so evidence quotes cannot end up citing our own
+                # summary lines back as if they were source text.
                 "body": "\n".join(filter(None, [
                     study.get("title"),
                     f"Overall status: {current.overall_status}",
@@ -160,16 +164,41 @@ class CtGovSource(BaseSource):
                     f"Phase: {current.phase}" if current.phase else "",
                     f"Conditions: {', '.join(study.get('conditions') or [])}",
                 ])),
+                "quotable": "\n".join(filter(None, [
+                    study.get("title"), current.why_stopped,
+                    current.overall_status, current.phase,
+                ])),
             },
         )
+        # A registry record states its facts in fields, not prose, so its evidence
+        # is the published field values with the field named as the locator.
+        # Quoting them this way keeps "signal + 原文依据" honest: each one is
+        # verbatim and checkable by opening the NCT page, and nothing is
+        # paraphrased into a sentence the registry never wrote.
+        for label, value in (("overallStatus", current.overall_status),
+                             ("phases", current.phase),
+                             ("whyStopped", current.why_stopped)):
+            if value:
+                item.evidence.quotes.append(
+                    Quote(text=str(value), url=url,
+                          locator=f"ClinicalTrials.gov · {label}"))
+
         # Give the grader the phase and stop tags directly; the text tagger sees
         # the same facts but the registry states them structurally.
         if _is_phase3(current.phase):
             item.study.append("PHASE3")
         if (current.overall_status or "") in STOPPED:
             item.study.append(current.overall_status)
-        if current.results_first_posted and (
-                previous is None or previous.results_first_posted != current.results_first_posted):
+        # Results already on file when we first see a study are not a readout:
+        # only a posting that actually happened in this window is news.
+        results_are_new = (
+            previous is not None
+            and previous.results_first_posted != current.results_first_posted
+        ) or (
+            previous is None and ctx.since is not None
+            and (current.results_first_posted or "") >= ctx.since
+        )
+        if current.results_first_posted and results_are_new:
             item.study.append("TOPLINE")
         return item
 

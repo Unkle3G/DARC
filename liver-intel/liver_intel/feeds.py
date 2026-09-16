@@ -41,6 +41,11 @@ class Feed:
     src_kind: str = "company"      # maps onto Item.meta.src_kind
     status: str = "unverified"
     company: str | None = None
+    #: Verification-only request for an endpoint whose base URL means nothing on
+    #: its own: an absolute URL, or a query string appended to ``url``. An API
+    #: base answers 404 or an error envelope when probed bare, which says
+    #: nothing about whether the endpoint works.
+    probe: str = ""
     keywords: list[str] = field(default_factory=list)
     last_checked: str | None = None
     http_status: int | None = None
@@ -48,6 +53,15 @@ class Feed:
     item_count: int | None = None
     has_date: bool | None = None
     note: str = ""
+
+    @property
+    def probe_url(self) -> str:
+        if not self.probe:
+            return self.url
+        if self.probe.startswith(("http://", "https://")):
+            return self.probe
+        return self.url.rstrip("/") + self.probe if self.probe.startswith("/") \
+            else self.url + self.probe
 
     @property
     def is_usable(self) -> bool:

@@ -1,8 +1,16 @@
 """Feed verification.
 
-A candidate becomes usable only after this module has fetched it and confirmed
-that it parses and carries a date field -- the acceptance bar the handover sets
-for T1 ("可访问、有日期字段").
+The bar depends on what the endpoint is.
+
+* **Feeds** (rss / atom / sitemap) must parse, carry items, and expose a date
+  field. That is the acceptance bar the handover sets for T1
+  ("可访问、有日期字段"): a feed with no dates cannot drive a daily digest.
+* **APIs** (api / json) are judged on a representative request instead -- see
+  ``Feed.probe``. A base URL answers 404 or an error envelope when probed bare,
+  and a lookup table such as EDGAR's company_tickers.json legitimately carries
+  no date at all. Date filtering on these sources is the adapter's job, applied
+  when it builds its own query, so demanding a date here would reject working
+  endpoints.
 """
 from __future__ import annotations
 
@@ -56,7 +64,7 @@ def _probe_xml(text: str) -> tuple[int, bool]:
     except Exception as exc:
         log.debug("feedparser failed: %s", exc)
 
-    items = len(re.findall(r"<(?:item|entry|url)\b", text, re.I))
+    items = len(re.findall(r"<(?:item|entry|url|sitemap)\b", text, re.I))
     has_date = bool(re.search(r"<(?:pubDate|published|updated|lastmod|dc:date)\b", text, re.I))
     return items, has_date
 
@@ -90,11 +98,26 @@ def _probe_json(text: str) -> tuple[int, bool]:
     return 0, False
 
 
+FEED_KINDS = ("rss", "atom", "sitemap")
+
+
+def _json_error(payload: Any) -> str:
+    """openFDA and E-utilities answer 200 with an error envelope."""
+    if isinstance(payload, dict):
+        error = payload.get("error") or payload.get("ERROR")
+        if isinstance(error, dict):
+            return str(error.get("message") or error.get("code") or "error")
+        if isinstance(error, str):
+            return error
+    return ""
+
+
 def verify_feed(feed: Feed, fetcher: Fetcher) -> VerifyResult:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     feed.last_checked = now
+    probe_url = feed.probe_url
     try:
-        response = fetcher.get(feed.url, allow_304=False)
+        response = fetcher.get(probe_url, allow_304=False)
     except Blocked as exc:
         feed.status = "blocked"
         feed.note = (f"refused: {exc}. Not retried -- decide manually whether to "
@@ -116,13 +139,32 @@ def verify_feed(feed: Feed, fetcher: Fetcher) -> VerifyResult:
         return VerifyResult(feed, False, feed.note)
 
     body = response.text
-    if feed.kind in ("json", "api") or "json" in (feed.content_type or ""):
-        count, has_date = _probe_json(body)
-    else:
-        count, has_date = _probe_xml(body)
+    is_api = feed.kind in ("json", "api") or "json" in (feed.content_type or "")
+    count, has_date = (_probe_json(body) if is_api else _probe_xml(body))
 
     feed.item_count = count
     feed.has_date = has_date
+
+    if is_api:
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError as exc:
+            feed.status = "dead"
+            feed.note = f"reachable but did not return JSON: {exc}"
+            return VerifyResult(feed, False, feed.note)
+        message = _json_error(payload)
+        if message:
+            feed.status = "dead"
+            feed.note = f"reachable but answered with an error: {message[:120]}"
+            return VerifyResult(feed, False, feed.note)
+        if count <= 0:
+            feed.status = "dead"
+            feed.note = "reachable but the probe returned an empty payload"
+            return VerifyResult(feed, False, feed.note)
+        feed.status = "verified"
+        feed.note = (f"verified {now}: probe returned {count} record(s)"
+                     + ("" if has_date else "; no date field (adapter supplies its own)"))
+        return VerifyResult(feed, True)
 
     if count <= 0:
         feed.status = "dead"

@@ -203,3 +203,83 @@ def test_x_alert_extracts_only_primary_links():
     links = XAlertSource.primary_links(
         "data out https://t.co/x https://www.globenewswire.com/a https://endpts.com/b")
     assert links == ["https://www.globenewswire.com/a"]
+
+
+# --- regressions found against live ClinicalTrials.gov data ----------------
+def test_withdrawing_an_application_is_not_a_filing(domain_map):
+    """A real registry entry read 'requests the permanent discontinuation and
+    withdrawal of Investigational New Drug application IND 152626'. The bare-id
+    pattern reported that as a regulatory filing -- the opposite of the fact."""
+    from liver_intel.tagger import Tagger
+
+    text = ("T-ACE Medical Co., Ltd. hereby submits this formal notification to the "
+            "U.S. Food and Drug Administration (FDA) to request the permanent "
+            "discontinuation and withdrawal of Investigational New Drug application "
+            "IND 152626.")
+    assert "SUBMISSION" not in Tagger(domain_map).tag_study(text)
+
+
+def test_a_real_filing_still_fires(domain_map):
+    from liver_intel.tagger import Tagger
+
+    tagger = Tagger(domain_map)
+    assert "SUBMISSION" in tagger.tag_study("The company submitted an NDA to the FDA.")
+    assert "SUBMISSION" in tagger.tag_study("The NDA was accepted for priority review.")
+    assert "SUBMISSION" in tagger.tag_study("该品种上市申请获得受理")
+
+
+def test_a_bare_application_id_is_not_a_filing(domain_map):
+    from liver_intel.tagger import Tagger
+
+    assert "SUBMISSION" not in Tagger(domain_map).tag_study(
+        "The study operated under IND 152626 since 2019.")
+
+
+def test_results_already_on_file_are_not_a_readout(store, fake_fetcher, domain_map):
+    """First sighting of a study whose results were posted years ago is not news."""
+    ctx = context(store, fake_fetcher, domain_map, since="2026-08-17")
+    item = CtGovSource()._diff_to_item(
+        ctx, study(status="TERMINATED", why="Business Reasons", results="2021-03-01"))
+    assert item is not None
+    assert "TOPLINE" not in item.study
+
+
+def test_results_posted_inside_the_window_are_a_readout(store, fake_fetcher, domain_map):
+    ctx = context(store, fake_fetcher, domain_map, since="2026-08-17")
+    item = CtGovSource()._diff_to_item(
+        ctx, study(status="TERMINATED", why="Business Reasons", results="2026-09-01"))
+    assert "TOPLINE" in item.study
+
+
+def test_evidence_never_quotes_engine_scaffolding(store, fake_fetcher, domain_map):
+    """meta.body carries lines we wrote ('Phase: PHASE3'); meta.quotable carries
+    only what the registry published."""
+    ctx = context(store, fake_fetcher, domain_map)
+    item = CtGovSource()._diff_to_item(
+        ctx, study(status="TERMINATED", why="Business Reasons"))
+    assert "Phase: PHASE3" in item.meta["body"]
+    assert "Phase: PHASE3" not in item.meta["quotable"]
+    assert "Business Reasons" in item.meta["quotable"]
+
+
+def test_registry_evidence_cites_fields_not_prose(store, fake_fetcher, domain_map):
+    """A registry record states its facts in fields. Evidence quotes the published
+    values with the field as the locator, rather than leaving a P0 unsupported."""
+    ctx = context(store, fake_fetcher, domain_map)
+    item = CtGovSource()._diff_to_item(
+        ctx, study(status="TERMINATED", why="Business Reasons"))
+    cited = {q.locator: q.text for q in item.evidence.quotes}
+    assert cited["ClinicalTrials.gov · overallStatus"] == "TERMINATED"
+    assert cited["ClinicalTrials.gov · whyStopped"] == "Business Reasons"
+    assert all(q.url.endswith("NCT0001") for q in item.evidence.quotes)
+
+
+def test_field_evidence_is_verifiable_against_the_quotable_text(store, fake_fetcher,
+                                                                domain_map):
+    from liver_intel.models import validate_quotes
+
+    ctx = context(store, fake_fetcher, domain_map)
+    item = CtGovSource()._diff_to_item(
+        ctx, study(status="TERMINATED", why="Business Reasons"))
+    quotable = "\n".join([item.title, item.meta["quotable"]])
+    assert validate_quotes(item, quotable) == []
