@@ -235,3 +235,34 @@ def test_a_real_marketing_approval_is_still_p0(tagger, domain_map):
     tagger.apply(i)
     result = grade.grade(i, domain_map, today="2026-09-14")
     assert "REG_APPROVAL" in result.signals and result.P == "P0"
+
+
+def test_a_consensus_conference_is_a_guideline(tagger, domain_map):
+    """EASL announced Baveno VIII as a 'Consensus Conference' issuing 'updated
+    guidance' -- wording none of the original guideline phrases matched, so the
+    most consequential item of the run graded P3."""
+    title = ("Baveno VIII Consensus Conference provides updated guidance on advanced "
+             "chronic liver disease, portal hypertension and vascular liver disease")
+    i = item(title, src_kind="society",
+             body=title + "\nExtensively updated set of clinical recommendations "
+                          "published in the Journal of Hepatology.")
+    tagger.apply(i)
+    result = grade.grade(i, domain_map, today="2026-09-14")
+    assert "GUIDELINE" in i.study
+    assert "GUIDELINE" in result.signals
+    assert result.P == "P1"
+
+
+def test_clinical_guidance_is_not_a_forecast(tagger):
+    """To a company 'guidance' forecasts earnings; to a society it is the
+    clinical guidance itself. Treating the word as future tense suppressed a
+    consensus statement entirely."""
+    sentences = tagger.sentence_tags(
+        "The guidance comes from the Baveno VIII Consensus Conference.")
+    assert sentences and not sentences[0].future
+
+
+def test_financial_guidance_is_still_a_forecast(tagger):
+    sentences = tagger.sentence_tags(
+        "The company raised full-year guidance and expects Phase 3 data to read out.")
+    assert all(s.future for s in sentences)

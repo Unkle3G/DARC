@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-16T17:44:33+00:00",
+  "updated": "2026-09-16T18:11:04+00:00",
   "note": "Every URL here must be probed by `liver-intel verify` before a collector will use it. See section 3 of the handover.",
   "entries": [
     {
@@ -704,6 +704,60 @@
       "item_count": 18061,
       "has_date": false,
       "note": "verified 2026-09-16T17:44:29+00:00: probe returned 18061 record(s); no date field (adapter supplies its own)"
+    },
+    {
+      "id": "easl.feed",
+      "url": "https://easl.eu/feed/",
+      "task": "T6",
+      "source": "society",
+      "kind": "rss",
+      "src_kind": "society",
+      "status": "verified",
+      "company": null,
+      "probe": "",
+      "keywords": [],
+      "last_checked": "2026-09-16T18:11:00+00:00",
+      "http_status": 200,
+      "content_type": "application/rss+xml",
+      "item_count": 12,
+      "has_date": true,
+      "note": "verified 2026-09-16T18:11:00+00:00: 12 items, date field present"
+    },
+    {
+      "id": "aasld.news",
+      "url": "https://www.aasld.org/aasld-news",
+      "task": "T6",
+      "source": "society",
+      "kind": "html",
+      "src_kind": "society",
+      "status": "verified",
+      "company": null,
+      "probe": "",
+      "keywords": [],
+      "last_checked": "2026-09-16T18:11:03+00:00",
+      "http_status": 200,
+      "content_type": "text/html",
+      "item_count": 1,
+      "has_date": null,
+      "note": "verified 2026-09-16T18:11:03+00:00: probe returned 48520 bytes"
+    },
+    {
+      "id": "aasld.guidelines",
+      "url": "https://www.aasld.org/practice-guidelines",
+      "task": "T6",
+      "source": "society",
+      "kind": "html",
+      "src_kind": "society",
+      "status": "verified",
+      "company": null,
+      "probe": "",
+      "keywords": [],
+      "last_checked": "2026-09-16T18:11:03+00:00",
+      "http_status": 200,
+      "content_type": "text/html",
+      "item_count": 1,
+      "has_date": null,
+      "note": "verified 2026-09-16T18:11:03+00:00: probe returned 51551 bytes"
     }
   ]
 }

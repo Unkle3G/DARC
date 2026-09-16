@@ -103,8 +103,16 @@ STUDY_PATTERNS: list[tuple[str, Sequence[str], Sequence[str]]] = [
     ("PUBLICATION", [r"published in", r"peer-reviewed", r"new england journal", r"the lancet",
                      r"journal of hepatology", r"\bhepatology\b"],
      ["发表于", "同行评审"]),
-    ("GUIDELINE", [r"clinical practice guideline", r"consensus statement", r"guidance for industry"],
-     ["临床指南", "专家共识", "诊疗规范"]),
+    # A society states its own work in more ways than one: the Baveno VIII
+    # output was announced as a "Consensus Conference" issuing "updated
+    # guidance" and "clinical recommendations", and matched none of the
+    # original three phrases.
+    ("GUIDELINE", [r"clinical practice guideline", r"practice guidance",
+                   r"consensus (?:statement|conference|document|report)",
+                   r"clinical recommendations", r"updated guidance",
+                   r"guidance on\s+\w+", r"position (?:paper|statement)",
+                   r"guidance for industry", r"guideline update"],
+     ["临床指南", "专家共识", "诊疗规范", "指南更新", "共识会议", "诊疗指南"]),
     ("REAL_WORLD", [r"real-world evidence", r"real-world data", r"registry cohort"],
      ["真实世界"]),
 ]
@@ -125,7 +133,11 @@ _INN_SUFFIX = re.compile(
 #: A statement about something that has not happened yet is not an event.
 FUTURE_TENSE = re.compile(
     r"(?i)\b(?:expected|expects?|anticipat\w+|plans? to|planned|will\s+\w+|"
-    r"on track|upcoming|projected|guidance|targeting|intends? to|"
+    # "guidance" alone is not a future marker: to a society it means clinical
+    # guidance, and treating it as one silently suppressed a consensus
+    # statement. Only the financial sense forecasts anything.
+    r"on track|upcoming|projected|targeting|intends? to|"
+    r"(?:financial|revenue|earnings|fiscal|full[- ]year)\s+guidance|"
     r"to be (?:reported|presented|initiated|completed)|later this year|"
     r"in the (?:first|second|third|fourth) quarter of \d{4})\b"
     r"|预计|计划|拟于|将于|有望")

@@ -10,6 +10,7 @@ from .newsroom import NewsroomSource
 from .newswire import NewswireSource
 from .pubmed import PubmedSource
 from .regulator import CnRegulatorSource, EmaSource, FdaSource
+from .society import SocietySource
 from .xalert import XAlertSource
 
 #: Collection order follows the handover's priority: T1 first, T8 last.
@@ -23,6 +24,7 @@ ALL_SOURCES = (
     PubmedSource,         # T4 (peer-reviewed channel)
     HkexSource,           # T5
     CninfoSource,         # T5
+    SocietySource,        # T6 (societies: guidelines, congress)
     NewsroomSource,       # T7
     XAlertSource,         # T8 (disabled by default)
 )
@@ -39,4 +41,4 @@ def build_sources(only: list[str] | None = None) -> list[BaseSource]:
 __all__ = ["ALL_SOURCES", "BaseSource", "Context", "Source", "build_sources",
            "CtGovSource", "EdgarSource", "NewswireSource", "FdaSource", "EmaSource",
            "CnRegulatorSource", "HkexSource", "CninfoSource", "NewsroomSource",
-           "PubmedSource", "XAlertSource"]
+           "PubmedSource", "SocietySource", "XAlertSource"]

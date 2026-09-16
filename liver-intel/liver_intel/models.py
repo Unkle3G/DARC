@@ -29,6 +29,7 @@ PRIMARY_SRC_KINDS = {
     "journal",        # peer-reviewed, published (not ahead-of-print preprint)
     "filing",         # SEC / HKEX / CNINFO statutory filing
     "conference",     # society-issued abstract / late-breaker book
+    "society",        # a learned society's own guideline or announcement
 }
 
 #: Hosts that are second-hand reporting or preprints.  Section 0 forbids both;

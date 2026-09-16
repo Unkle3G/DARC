@@ -137,12 +137,17 @@ own announcement pages.
 
 ## T6 — conference calendar
 
-Fill `data/conferences.json` with the confirmed 2026 EASL / AASLD / APASL meeting
-dates and late-breaker release dates, set `"verified": true`, and record the page
-you took them from in `source_url`. **The 2026 AASLD dates were left blank on
-purpose** — the handover says to look them up, and this session could not.
+Dates come from the society's own pages, not from recall. AASLD 2026 is filled
+in: the meeting runs 5-9 November 2026 in Denver (`/tlm-26/event-registration`),
+and the late-breaker date is the embargo lift, 5 November 2026
+(`/tlm-26/embargo-policy`) -- the moment those abstracts become public and
+therefore citable. Regular abstracts lift earlier, on 5 October.
 
-Until then every window is inert and `status` warns on each run. Verify with:
+EASL 2027 and APASL are still blank: the 2027 congress page carries no dates
+yet, and APASL's domain is not in the environment's allowlist, so nothing could
+be read. Both record where to look in `source_url`.
+
+An unverified entry stays inert and `status` warns on each run. Verify with:
 
 ```bash
 python -m liver_intel.cli status    # the warning disappears once dates are set

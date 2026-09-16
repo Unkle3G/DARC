@@ -1,40 +1,40 @@
 {
-  "note": "T6 conference calendar. Dates MUST be confirmed against each society's own site before use. Entries with \"verified\": false are inert: liver_intel.conference refuses to change collection frequency or tag items from them, and every run prints a reminder. The 2026 AASLD meeting dates and late-breaker release date were explicitly left to be looked up (handover T6); this session had no network access, so nothing was filled in from memory.",
+  "note": "T6 conference calendar. A date is filled in only when it was read from the society's own page, and source_url records where. An entry with \"verified\": false is inert: liver_intel.conference refuses to open a window or tag an item from it.",
   "boost_days_before": 2,
   "boost_days_after": 2,
   "conferences": [
     {
-      "id": "EASL2026",
-      "name": "EASL Congress 2026",
+      "id": "AASLD2026",
+      "name": "AASLD The Liver Meeting 2026",
+      "society": "AASLD",
+      "start": "2026-11-05",
+      "end": "2026-11-09",
+      "late_breaker_release": "2026-11-05",
+      "verified": true,
+      "source_url": "https://www.aasld.org/tlm-26/embargo-policy",
+      "note": "Denver, Colorado. Dates from /tlm-26/event-registration (\"taking place November 5-9 in Denver, Colorado\"). The late-breaker date is the embargo lift, from /tlm-26/embargo-policy: \"Late-Breaking Abstract Embargo lifts on Thursday, Nov. 5, 2026, at 8:00 AM MT\" -- that is the moment the abstracts become public and therefore citable. Regular abstracts lift earlier, on 5 Oct 2026."
+    },
+    {
+      "id": "EASL2027",
+      "name": "EASL Congress 2027",
       "society": "EASL",
       "start": null,
       "end": null,
       "late_breaker_release": null,
       "verified": false,
-      "source_url": null,
-      "note": "Fill start/end and the late-breaker abstract release date from the EASL congress site, then set verified=true."
+      "source_url": "https://easl.eu/event/easl-congress-2027/",
+      "note": "The 2027 congress page carries no dates yet. EASL Congress 2026 has already taken place, so it is not tracked here. Re-read the source_url and fill start/end plus the late-breaker release once published."
     },
     {
-      "id": "AASLD2026",
-      "name": "AASLD The Liver Meeting 2026",
-      "society": "AASLD",
-      "start": null,
-      "end": null,
-      "late_breaker_release": null,
-      "verified": false,
-      "source_url": null,
-      "note": "Handover T6 calls this out specifically: look up the 2026 meeting dates and the late-breaker release date, then set verified=true."
-    },
-    {
-      "id": "APASL2026",
-      "name": "APASL Annual Meeting 2026",
+      "id": "APASL2027",
+      "name": "APASL Annual Meeting 2027",
       "society": "APASL",
       "start": null,
       "end": null,
       "late_breaker_release": null,
       "verified": false,
       "source_url": null,
-      "note": "Fill from the APASL meeting site, then set verified=true."
+      "note": "APASL's own domain is not in this environment's network allowlist, so nothing could be read. Allow it, then fill these in from the society's page."
     }
   ]
 }
