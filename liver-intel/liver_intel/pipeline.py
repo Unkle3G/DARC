@@ -86,10 +86,6 @@ def enrich(items: Iterable[Item], ctx: Context, judge: llm.Judge,
         # adapter that synthesises a readable body (the registry one does) puts
         # the genuine part in meta["quotable"]; without that the body is the
         # fetched document and is quotable as it stands.
-        source_text = "\n".join(filter(None, [
-            item.title, str(item.meta.get("body") or ""),
-            str(item.meta.get("summary") or ""),
-        ]))
         quotable = "\n".join(filter(None, [
             item.title,
             str(item.meta.get("quotable") or item.meta.get("body") or ""),
