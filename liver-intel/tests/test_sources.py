@@ -424,3 +424,35 @@ def test_8k_still_needs_a_wanted_item_code(store, fake_fetcher, domain_map):
     ctx = context(store, fake_fetcher, domain_map, [tickers, subs])
     ctx.domain_map.companies = [Company(name="X", ticker="X", market="us")]
     assert EdgarSource().run(ctx) == []
+
+
+def test_hkex_rows_parse_without_the_mobile_labels():
+    from liver_intel.sources.hkex import parse_results
+
+    html = """<tr>
+      <td class="text-right release-time"><span class="mobile-list-heading">Release Time: </span>16/09/2026 18:04</td>
+      <td class="stock-short-code"><span class="mobile-list-heading">Stock Code: </span>02137</td>
+      <td class="stock-short-name"><span class="mobile-list-heading">Stock Short Name: </span>BRII-B</td>
+      <td><div class="headline">Announcements and Notices - [Other - Business Update]</div>
+          <div class="doc-link"><a href="/listedco/listconews/sehk/2026/0916/x.pdf">Business Update</a></div>
+      </td></tr>"""
+    row = parse_results(html)[0]
+    assert row["date"] == "2026-09-16"
+    assert row["code"] == "02137"
+    assert row["short_name"] == "BRII-B"
+    assert row["url"].endswith("/2026/0916/x.pdf")
+
+
+def test_hkex_title_comes_from_inside_the_pdf():
+    """The search headline is only a category label; the announcement's own
+    title is in the document."""
+    from liver_intel.sources.hkex import _announcement_title
+
+    body = ("Hong Kong Exchanges and Clearing Limited ... expressly disclaim any "
+            "liability whatsoever for any loss howsoever arising from or in reliance "
+            "upon the whole or any part of the contents of this announcement.\n"
+            "Ascletis Pharma Inc.\n(Stock Code: 1672)\n"
+            "VOLUNTARY ANNOUNCEMENT\n"
+            "ASCLETIS ANNOUNCES INITIATION OF PHASE I STUDY IN U.S.\n\n"
+            "- This trial marks the fourth Phase I peptide study this year.")
+    assert _announcement_title(body) == "ASCLETIS ANNOUNCES INITIATION OF PHASE I STUDY IN U.S."

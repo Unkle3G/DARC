@@ -4,7 +4,8 @@ from __future__ import annotations
 from .base import BaseSource, Context, Source
 from .ctgov import CtGovSource
 from .edgar import EdgarSource
-from .exchange import CninfoSource, HkexSource
+from .exchange import CninfoSource
+from .hkex import HkexSource
 from .newsroom import NewsroomSource
 from .newswire import NewswireSource
 from .pubmed import PubmedSource

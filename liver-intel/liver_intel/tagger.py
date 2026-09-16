@@ -82,6 +82,14 @@ STUDY_PATTERNS: list[tuple[str, Sequence[str], Sequence[str]]] = [
                     r"(?:was |has been )?(?:submitted|filed|accepted)",
                     r"regulatory submission", r"marketing application"],
      ["上市申请", "新药申请", "受理", "申报", "临床试验申请"]),
+    ("TRIAL_CLEARANCE",
+     [r"(?:application|ind|cta)[^.]{0,80}for\s+(?:a\s+)?clinical trial[^.]{0,60}"
+      r"(?:approved|cleared|accepted)",
+      r"clinical trial (?:application|authorisation|authorization)[^.]{0,60}"
+      r"(?:approved|cleared|granted|accepted)",
+      r"(?:ind|investigational new drug)[^.]{0,40}(?:cleared|approved|allowed to proceed)",
+      r"may proceed letter"],
+     ["临床试验申请获批", "临床试验申请获得批准", "临床试验批件", "获准开展临床试验", "默示许可"]),
     ("CRL", [r"complete response letter", r"\bcrl\b", r"refuse to file"], ["完整回复函"]),
     ("DESIGNATION", [r"breakthrough therapy", r"fast track", r"orphan drug", r"priority review",
                      r"prime designation", r"regenerative medicine advanced therapy"],

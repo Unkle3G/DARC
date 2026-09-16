@@ -98,11 +98,6 @@ class ExchangeSource(BaseSource):
         return item
 
 
-class HkexSource(ExchangeSource):
-    id = "hkex"
-    venue = "HKEX"
-
-
 class CninfoSource(ExchangeSource):
     id = "cninfo"
     venue = "CNINFO"

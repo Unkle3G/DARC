@@ -196,3 +196,24 @@ def test_unreachable_entries_are_reprobed_next_run(fake_fetcher):
                      "<pubDate>Mon, 14 Sep 2026 08:00:00 GMT</pubDate></item></channel></rss>")
     verify_registry(registry, fake_fetcher)
     assert registry.entries[0].status == "verified"
+
+
+def test_jsonp_endpoint_verifies(fake_fetcher):
+    """HKEX's stock lookup answers with callback({...}); treating that as
+    malformed JSON marked a working endpoint dead."""
+    url = "https://www1.hkexnews.hk/search/prefix.do?"
+    fake_fetcher.add(url, 'callback({"more":"1","stockInfo":[{"stockId":1,"code":"02137",'
+                          '"name":"BRII-B","date":"2026-09-16"}]});')
+    assert verify_feed(feed(url=url, kind="api"), fake_fetcher).feed.status == "verified"
+
+
+def test_html_search_page_verifies_on_content(fake_fetcher):
+    url = "https://www1.hkexnews.hk/search/titlesearch.xhtml"
+    fake_fetcher.add(url, "<html>" + "x" * 900 + "</html>")
+    assert verify_feed(feed(url=url, kind="html"), fake_fetcher).feed.status == "verified"
+
+
+def test_empty_html_page_is_dead(fake_fetcher):
+    url = "https://www1.hkexnews.hk/search/titlesearch.xhtml"
+    fake_fetcher.add(url, "<html></html>")
+    assert verify_feed(feed(url=url, kind="html"), fake_fetcher).feed.status == "dead"

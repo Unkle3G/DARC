@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-16T17:00:21+00:00",
+  "updated": "2026-09-16T17:44:33+00:00",
   "note": "Every URL here must be probed by `liver-intel verify` before a collector will use it. See section 3 of the handover.",
   "entries": [
     {
@@ -392,7 +392,7 @@
       "company": null,
       "probe": "",
       "keywords": [],
-      "last_checked": "2026-09-16T16:34:43+00:00",
+      "last_checked": "2026-09-16T17:44:28+00:00",
       "http_status": 404,
       "content_type": "text/html",
       "item_count": null,
@@ -650,6 +650,60 @@
       "item_count": 20,
       "has_date": true,
       "note": "wire category feed outside the liver scope: every item it carries fails the line gate"
+    },
+    {
+      "id": "hkex.prefix",
+      "url": "https://www1.hkexnews.hk/search/prefix.do?",
+      "task": "T5",
+      "source": "hkex",
+      "kind": "api",
+      "src_kind": "filing",
+      "status": "verified",
+      "company": null,
+      "probe": "callback=callback&lang=EN&type=A&name=2137&market=SEHK",
+      "keywords": [],
+      "last_checked": "2026-09-16T17:36:58+00:00",
+      "http_status": 200,
+      "content_type": "application/javascript",
+      "item_count": 2,
+      "has_date": false,
+      "note": "verified 2026-09-16T17:36:58+00:00: probe returned 2 record(s); no date field (adapter supplies its own)"
+    },
+    {
+      "id": "hkex.titlesearch",
+      "url": "https://www1.hkexnews.hk/search/titlesearch.xhtml",
+      "task": "T5",
+      "source": "hkex",
+      "kind": "html",
+      "src_kind": "filing",
+      "status": "verified",
+      "company": null,
+      "probe": "?lang=EN&category=0&market=SEHK&searchType=1&documentType=-1&t1code=-2&t2Gcode=-2&t2code=-2&stockId=1000101866&from=20260601&to=20260916&MB-Daterange=0&title=",
+      "keywords": [],
+      "last_checked": "2026-09-16T17:36:34+00:00",
+      "http_status": 200,
+      "content_type": "text/html",
+      "item_count": 1,
+      "has_date": null,
+      "note": "verified 2026-09-16T17:36:34+00:00: probe returned 26554 bytes"
+    },
+    {
+      "id": "hkex.activestock",
+      "url": "https://www.hkexnews.hk/ncms/script/eds/activestock_sehk_e.json",
+      "task": "T5",
+      "source": "hkex",
+      "kind": "json",
+      "src_kind": "filing",
+      "status": "verified",
+      "company": null,
+      "probe": "",
+      "keywords": [],
+      "last_checked": "2026-09-16T17:44:29+00:00",
+      "http_status": 200,
+      "content_type": "application/json",
+      "item_count": 18061,
+      "has_date": false,
+      "note": "verified 2026-09-16T17:44:29+00:00: probe returned 18061 record(s); no date field (adapter supplies its own)"
     }
   ]
 }

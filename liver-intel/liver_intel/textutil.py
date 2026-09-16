@@ -1,8 +1,11 @@
 """Small text helpers shared by the adapters."""
 from __future__ import annotations
 
+import logging
 import re
 from html.parser import HTMLParser
+
+log = logging.getLogger(__name__)
 
 _SKIP_TAGS = {"script", "style", "noscript", "svg", "head"}
 _BLOCK_TAGS = {"p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6",
@@ -103,3 +106,30 @@ def lead(text: str, limit: int = 600) -> str:
         if size >= limit:
             break
     return "\n".join(out)
+
+
+def pdf_text(data: bytes, max_pages: int = 6) -> str:
+    """Text of a PDF announcement.
+
+    HKEX publishes announcements as PDFs whose search headline is only a
+    category label ("Announcements and Notices - [Other - Business Update]"),
+    so the document itself is the only place the news exists.
+    """
+    import io
+    import logging as _logging
+
+    try:
+        import pypdf
+    except ImportError:
+        log.info("pypdf is not installed; PDF announcements cannot be read")
+        return ""
+    # pypdf warns per font about optional tooling; it is noise here.
+    _logging.getLogger("pypdf").setLevel(_logging.ERROR)
+    try:
+        reader = pypdf.PdfReader(io.BytesIO(data))
+        pages = reader.pages[:max_pages]
+        return re.sub(r"\n{3,}", "\n\n",
+                      "\n".join((page.extract_text() or "") for page in pages)).strip()
+    except Exception as exc:
+        log.info("could not read PDF: %s", exc)
+        return ""

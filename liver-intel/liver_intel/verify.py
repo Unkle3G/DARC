@@ -69,9 +69,24 @@ def _probe_xml(text: str) -> tuple[int, bool]:
     return items, has_date
 
 
+#: A JSONP response wraps its payload in a callback. HKEX's stock lookup answers
+#: this way, and treating it as malformed JSON marks a working endpoint dead.
+_JSONP = re.compile(r"^\s*[\w.$]+\s*\((.*)\)\s*;?\s*$", re.S)
+
+
+def _loads(text: str) -> Any:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        match = _JSONP.match(text or "")
+        if match is None:
+            raise
+        return json.loads(match.group(1))
+
+
 def _probe_json(text: str) -> tuple[int, bool]:
     try:
-        payload: Any = json.loads(text)
+        payload: Any = _loads(text)
     except json.JSONDecodeError:
         return 0, False
 
@@ -139,6 +154,18 @@ def verify_feed(feed: Feed, fetcher: Fetcher) -> VerifyResult:
         return VerifyResult(feed, False, feed.note)
 
     body = response.text
+    if feed.kind == "html":
+        # A search page is not a feed and has no date field of its own: it is
+        # usable when the probe comes back with a page that has content.
+        if len(body.strip()) < 500:
+            feed.status = "dead"
+            feed.note = "reachable but the probe returned an empty page"
+            return VerifyResult(feed, False, feed.note)
+        feed.status = "verified"
+        feed.item_count = 1
+        feed.note = f"verified {now}: probe returned {len(body)} bytes"
+        return VerifyResult(feed, True)
+
     is_api = feed.kind in ("json", "api") or "json" in (feed.content_type or "")
     count, has_date = (_probe_json(body) if is_api else _probe_xml(body))
 
@@ -147,7 +174,7 @@ def verify_feed(feed: Feed, fetcher: Fetcher) -> VerifyResult:
 
     if is_api:
         try:
-            payload = json.loads(body)
+            payload = _loads(body)
         except json.JSONDecodeError as exc:
             feed.status = "dead"
             feed.note = f"reachable but did not return JSON: {exc}"

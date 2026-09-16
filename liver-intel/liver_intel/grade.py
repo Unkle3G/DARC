@@ -43,6 +43,8 @@ SIGNALS: dict[str, dict[str, object]] = {
     "EARLY_RESULT":      {"weight": "background", "desc": "Phase 1 / preclinical / translational result"},
     "TRIAL_PROGRESS":    {"weight": "background", "desc": "Enrolment, protocol or registry progress"},
     "REG_LIST_CHANGE":   {"weight": "background", "desc": "Regulator list page changed (acceptance, review queue)"},
+    "REG_TRIAL_CLEARANCE": {"weight": "background",
+                            "desc": "Clinical trial application (IND/CTA) cleared -- permission to start a trial, not a marketing approval"},
     "CORPORATE":         {"weight": "background", "desc": "Financing, personnel or other corporate item"},
 }
 
@@ -134,7 +136,12 @@ def _signals_for(study: set[str], item: Item) -> list[str]:
     elif phase2 and readout:
         out.append("PH2_RESULT")
 
-    if "APPROVAL" in study and item.meta.get("src_kind") in ("regulator", "company", "filing"):
+    if "TRIAL_CLEARANCE" in study:
+        # "Application for clinical trial ... approved by FDA" is permission to
+        # begin, not a product approval. Both use the word approved, and one
+        # real announcement of an IND clearance was graded P0 as a drug approval.
+        out.append("REG_TRIAL_CLEARANCE")
+    elif "APPROVAL" in study and item.meta.get("src_kind") in ("regulator", "company", "filing"):
         out.append("REG_APPROVAL")
     if "CRL" in study:
         out.append("REG_REJECTION")

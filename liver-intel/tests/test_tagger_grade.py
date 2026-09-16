@@ -213,3 +213,25 @@ def test_generic_microbiome_mention_is_gated(tagger):
 def test_microbiome_with_liver_context_fires(tagger):
     lines, _ = tagger.tag_lines("Microbiome shifts drive the gut-liver axis in cirrhosis")
     assert "L15" in lines
+
+
+def test_ind_clearance_is_not_a_marketing_approval(tagger, domain_map):
+    """A real HKEX announcement read 'APPLICATION FOR CLINICAL TRIAL ON TQB6426
+    GPC3 ADC APPROVED BY FDA' -- permission to start a trial. Reading the word
+    approved made it a P0 drug approval."""
+    title = ("APPLICATION FOR CLINICAL TRIAL ON TQB6426 GPC3 ADC APPROVED BY FDA "
+             "for hepatocellular carcinoma")
+    i = item(title, src_kind="filing", body=title)
+    tagger.apply(i)
+    result = grade.grade(i, domain_map, today="2026-09-14")
+    assert "REG_APPROVAL" not in result.signals
+    assert "REG_TRIAL_CLEARANCE" in result.signals
+    assert result.P == "P2"
+
+
+def test_a_real_marketing_approval_is_still_p0(tagger, domain_map):
+    title = "FDA approved Rezdiffra for the treatment of MASH with liver fibrosis"
+    i = item(title, src_kind="regulator", body=title)
+    tagger.apply(i)
+    result = grade.grade(i, domain_map, today="2026-09-14")
+    assert "REG_APPROVAL" in result.signals and result.P == "P0"

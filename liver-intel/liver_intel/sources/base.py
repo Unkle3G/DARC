@@ -26,6 +26,8 @@ class Context:
     since: str | None = None          # ISO date, for backfills
     conference_window: dict[str, Any] | None = None
     notes: list[str] = field(default_factory=list)
+    #: Remaining budget for expensive per-document fetches (HKEX PDFs).
+    pdf_budget: int = 0
 
     def feeds(self, source: str) -> list[Feed]:
         return self.registry.usable(
