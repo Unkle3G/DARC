@@ -37,7 +37,7 @@
 
     {"id": "hkex.root", "url": "https://www.hkexnews.hk/", "task": "T5",
      "source": "hkex", "kind": "discover_root", "src_kind": "filing", "status": "discover_root"},
-    {"id": "cninfo.root", "url": "http://www.cninfo.com.cn/", "task": "T5",
+    {"id": "cninfo.root", "url": "https://www.cninfo.com.cn/", "task": "T5",
      "source": "cninfo", "kind": "discover_root", "src_kind": "filing", "status": "discover_root"},
 
     {"id": "pubmed.esummary", "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
