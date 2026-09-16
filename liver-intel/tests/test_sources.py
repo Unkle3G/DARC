@@ -376,3 +376,51 @@ def test_unresolved_companies_are_named_once(store, fake_fetcher, domain_map):
     ctx.domain_map.companies = [Company(name="Gone Inc", ticker="GONE", market="us")]
     assert EdgarSource().run(ctx) == []
     assert any("no CIK for: Gone Inc" in note for note in ctx.notes)
+
+
+def test_foreign_issuers_6k_is_collected(store, fake_fetcher, domain_map):
+    """Novo Nordisk, GSK, AstraZeneca and Takeda filed no 8-K over a recent
+    quarter -- only 6-K, which carries no Item codes."""
+    from liver_intel.domain_map import Company
+
+    tickers = Feed(id="sec.company_tickers",
+                   url="https://www.sec.gov/files/company_tickers.json",
+                   source="edgar", status="verified")
+    subs = Feed(id="sec.submissions", url="https://data.sec.gov/submissions/",
+                source="edgar", status="verified")
+    fake_fetcher.add(tickers.url, json.dumps(
+        {"0": {"cik_str": 353278, "ticker": "NVO", "title": "NOVO NORDISK A S"}}))
+    fake_fetcher.add("https://data.sec.gov/submissions/CIK0000353278.json", json.dumps({
+        "filings": {"recent": {
+            "form": ["6-K"], "items": [""], "filingDate": ["2026-09-14"],
+            "accessionNumber": ["0001-26-000009"], "primaryDocument": ["a.htm"],
+            "primaryDocDescription": ["6-K"], "reportDate": ["2026-09-14"]}}}))
+    fake_fetcher.add("https://www.sec.gov/Archives/edgar/data/353278/", "")
+
+    ctx = context(store, fake_fetcher, domain_map, [tickers, subs])
+    ctx.domain_map.companies = [Company(name="Novo Nordisk", ticker="NVO",
+                                        market="eu", tier=1)]
+    items = EdgarSource().run(ctx)
+    assert len(items) == 1
+    assert items[0].meta["form"] == "6-K"
+    assert items[0].meta["form_is_itemless"] is True
+
+
+def test_8k_still_needs_a_wanted_item_code(store, fake_fetcher, domain_map):
+    from liver_intel.domain_map import Company
+
+    tickers = Feed(id="sec.company_tickers",
+                   url="https://www.sec.gov/files/company_tickers.json",
+                   source="edgar", status="verified")
+    subs = Feed(id="sec.submissions", url="https://data.sec.gov/submissions/",
+                source="edgar", status="verified")
+    fake_fetcher.add(tickers.url, json.dumps(
+        {"0": {"cik_str": 1, "ticker": "X", "title": "X"}}))
+    fake_fetcher.add("https://data.sec.gov/submissions/CIK0000000001.json", json.dumps({
+        "filings": {"recent": {
+            "form": ["8-K"], "items": ["5.02"], "filingDate": ["2026-09-14"],
+            "accessionNumber": ["0001-26-000010"], "primaryDocument": ["a.htm"],
+            "primaryDocDescription": ["8-K"], "reportDate": ["2026-09-14"]}}}))
+    ctx = context(store, fake_fetcher, domain_map, [tickers, subs])
+    ctx.domain_map.companies = [Company(name="X", ticker="X", market="us")]
+    assert EdgarSource().run(ctx) == []

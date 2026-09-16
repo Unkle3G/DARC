@@ -18,6 +18,7 @@ from datetime import date, timedelta
 
 from .config import Settings
 from .conference import Calendar
+from .coverage import assess as assess_coverage
 from .discover import discover
 from .domain_map import load as load_domain_map
 from .feeds import Feed, Registry
@@ -231,6 +232,33 @@ def cmd_feeds_ignore(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_coverage(args: argparse.Namespace) -> int:
+    """Which sources can actually reach each company on the roster."""
+    dm = load_domain_map()
+    coverage = assess_coverage(dm, Registry.load())
+
+    print("cross-cutting sources (reach events regardless of the announcer):")
+    for source in coverage.cross_cutting or ["  none verified"]:
+        print(f"  - {source}")
+    print()
+    print(f"company-specific coverage: {coverage.rate:.0%} "
+          f"({len(coverage.companies) - len(coverage.uncovered)}/{len(coverage.companies)})")
+    print()
+    for entry in sorted(coverage.companies,
+                        key=lambda c: (c.covered, c.company.tier, c.company.name)):
+        mark = "ok  " if entry.covered else "GAP "
+        sources = ", ".join(entry.specific) or "-"
+        print(f"{mark} tier{entry.company.tier} {entry.company.name[:38]:38s} {sources}")
+        if not entry.covered and args.verbose:
+            for reason in entry.missing:
+                print(f"{'':52s}{reason}")
+    if coverage.uncovered:
+        print()
+        print(f"{len(coverage.uncovered)} company(ies) have no company-specific source; "
+              f"their news is only caught when a cross-cutting source picks it up.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="liver-intel",
                                      description=__doc__,
@@ -270,6 +298,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--reason")
     p.add_argument("--undo", action="store_true")
     p.set_defaults(func=cmd_feeds_ignore)
+
+    p = sub.add_parser("coverage", help="per-company source coverage")
+    p.set_defaults(func=cmd_coverage)
 
     p = sub.add_parser("status", help="registry, roster coverage and calendar state")
     p.set_defaults(func=cmd_status)

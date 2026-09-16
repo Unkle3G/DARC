@@ -23,6 +23,13 @@ from .base import BaseSource, Context
 log = logging.getLogger(__name__)
 
 WANTED_ITEMS = ("7.01", "8.01", "2.02")
+
+#: A foreign private issuer files 6-K where a domestic one files 8-K -- Novo
+#: Nordisk, GSK, AstraZeneca and Takeda filed no 8-K at all over a recent
+#: quarter, only 6-K. A 6-K carries no Item codes, so the item filter that
+#: narrows 8-K to Reg FD / Other Events / Results cannot apply to it; the line
+#: tagger does that work instead.
+ITEMLESS_FORMS = ("6-K",)
 TICKERS_ID = "sec.company_tickers"
 SUBMISSIONS_ID = "sec.submissions"
 ARCHIVES = "https://www.sec.gov/Archives/edgar/data"
@@ -43,7 +50,8 @@ class EdgarSource(BaseSource):
     task = "T2"
     src_kind = "filing"
 
-    def __init__(self, forms: Iterable[str] = ("8-K",), max_filings_per_company: int = 40):
+    def __init__(self, forms: Iterable[str] = ("8-K", "6-K"),
+                 max_filings_per_company: int = 40):
         self.forms = tuple(forms)
         self.max_filings_per_company = max_filings_per_company
 
@@ -66,9 +74,20 @@ class EdgarSource(BaseSource):
                 out[ticker] = {"cik": int(row["cik_str"]), "title": row.get("title", "")}
         return out
 
-    def _us_companies(self, ctx: Context) -> list[Company]:
+    #: Markets whose companies file with an exchange rather than the SEC.
+    NON_SEC_MARKETS = ("hk", "cn")
+
+    def _sec_companies(self, ctx: Context) -> list[Company]:
+        """Roster companies that file with the SEC.
+
+        Not a geographic test: a European issuer with a US listing files there
+        too, as a foreign private issuer. Filtering on market "us"/"global" left
+        Novo Nordisk, Roche, Inventiva and GENFIT out of EDGAR entirely even
+        though several of them file every week.
+        """
         return [c for c in ctx.domain_map.companies
-                if c.market in ("us", "global") and (c.plain_ticker or c.cik)]
+                if c.market not in self.NON_SEC_MARKETS and c.sec_filer
+                and (c.plain_ticker or c.cik)]
 
     # -- collection -------------------------------------------------------
     def collect(self, ctx: Context) -> list[Item]:
@@ -77,7 +96,7 @@ class EdgarSource(BaseSource):
             ctx.note(f"[{self.id}] {SUBMISSIONS_ID} is not verified -- skipping EDGAR.")
             return []
 
-        companies = self._us_companies(ctx)
+        companies = self._sec_companies(ctx)
         tickers = self._ticker_map(ctx)
         # No early exit when the lookup comes back empty: a company with a pinned
         # CIK is still reachable, and one without ends up in ``unresolved`` below,
@@ -118,7 +137,7 @@ class EdgarSource(BaseSource):
                 continue
             filing_items = str(_at(recent, "items", index) or "")
             wanted = [code for code in WANTED_ITEMS if code in filing_items]
-            if not wanted:
+            if not wanted and form not in ITEMLESS_FORMS:
                 continue
             filed = as_iso_date(_at(recent, "filingDate", index))
             if not filed or (ctx.since and filed < ctx.since):
@@ -141,6 +160,7 @@ class EdgarSource(BaseSource):
                     "src_kind": self.src_kind,
                     "form": form,
                     "edgar_items": wanted,
+                    "form_is_itemless": form in ITEMLESS_FORMS,
                     "accession": accession,
                     "cik": cik,
                     "companies": [company.name],

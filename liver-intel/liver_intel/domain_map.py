@@ -60,6 +60,10 @@ class Company:
     #: company_tickers.json lists only currently-listed tickers, so an acquired
     #: or delisted filer drops out of it even though its filings remain.
     cik: int | None = None
+    #: False when the company has been confirmed not to file with the SEC. A
+    #: ticker on this roster is not proof that EDGAR can reach a company: a
+    #: Euronext or SIX listing has a ticker and no SEC filings at all.
+    sec_filer: bool = True
     market: str = ""
     tier: int = 3
     lines: list[str] = field(default_factory=list)
