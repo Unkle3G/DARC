@@ -456,3 +456,39 @@ def test_hkex_title_comes_from_inside_the_pdf():
             "ASCLETIS ANNOUNCES INITIATION OF PHASE I STUDY IN U.S.\n\n"
             "- This trial marks the fourth Phase I peptide study this year.")
     assert _announcement_title(body) == "ASCLETIS ANNOUNCES INITIATION OF PHASE I STUDY IN U.S."
+
+
+# --- openFDA sponsor lookup ------------------------------------------------
+def test_sponsor_token_matches_how_drugsfda_files_a_company():
+    """drugsfda stores sponsors short and upper-cased -- MADRIGAL, GILEAD,
+    MIRUM. Querying the full company name matched nothing for anyone."""
+    from liver_intel.sources.regulator import sponsor_token
+
+    assert sponsor_token("Madrigal Pharmaceuticals") == "MADRIGAL"
+    assert sponsor_token("Gilead Sciences") == "GILEAD"
+    assert sponsor_token("AbbVie") == "ABBVIE"
+
+
+def test_sponsor_token_prefers_a_four_letter_word():
+    """'Eli Lilly' is filed under LILLY; ELI would be the wrong company."""
+    from liver_intel.sources.regulator import sponsor_token
+
+    assert sponsor_token("Eli Lilly") == "LILLY"
+
+
+def test_sponsor_token_falls_back_for_short_names():
+    from liver_intel.sources.regulator import sponsor_token
+
+    assert sponsor_token("GSK") == "GSK"
+
+
+def test_sponsor_token_keeps_a_leading_number():
+    from liver_intel.sources.regulator import sponsor_token
+
+    assert sponsor_token("89bio") == "89BIO"
+
+
+def test_sponsor_token_skips_words_identifying_no_one():
+    from liver_intel.sources.regulator import sponsor_token
+
+    assert sponsor_token("The New Company") == "COMPANY"

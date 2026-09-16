@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 from urllib.parse import quote, urlencode
 
@@ -23,6 +24,29 @@ from .newswire import parse_feed
 log = logging.getLogger(__name__)
 
 OPENFDA_ID = "openfda.drugsfda"
+OPENFDA_LABEL = "https://api.fda.gov/drug/label.json"
+
+#: Words that identify no one in particular.
+_GENERIC_SPONSOR_WORDS = {"THE", "NEW", "AMERICAN", "NATIONAL", "UNITED", "GENERAL"}
+
+
+def sponsor_token(name: str) -> str:
+    """The word drugsfda is likely to file a company under.
+
+    Sponsor names there are short and upper-cased, so the first distinctive word
+    of the company name is what matches. Anything too short or too generic is
+    skipped rather than queried: a broad token pulls in other companies' records.
+    """
+    words = [w.upper() for w in re.findall(r"[A-Za-z0-9]+", name or "")
+             if any(c.isalpha() for c in w)]
+    words = [w for w in words if w not in _GENERIC_SPONSOR_WORDS]
+    # Four letters first: "Eli Lilly" must not be filed under ELI. Only when no
+    # such word exists does a shorter one count, which is how GSK resolves.
+    for minimum in (4, 3):
+        for word in words:
+            if len(word) >= minimum:
+                return word
+    return ""
 
 
 class FdaSource(BaseSource):
@@ -35,6 +59,7 @@ class FdaSource(BaseSource):
 
     def __init__(self, lookback_days: int = 120):
         self.lookback_days = lookback_days
+        self._labels: dict[str, str] = {}
 
     def collect(self, ctx: Context) -> list[Item]:
         items: list[Item] = []
@@ -52,24 +77,34 @@ class FdaSource(BaseSource):
         out: list[Item] = []
         sponsors = [c for c in ctx.domain_map.companies if c.market in ("us", "eu", "global")]
         for company in sponsors:
-            latin = (company.aliases or [company.name])[0]
-            query = f'sponsor_name:"{latin}"'
+            token = sponsor_token(company.name)
+            if not token:
+                continue
+            # drugsfda stores sponsors short and upper-cased -- "MADRIGAL",
+            # "GILEAD", "MIRUM". A quoted full company name
+            # ("Madrigal Pharmaceuticals") matches nothing at all, which is why
+            # this source returned zero for every company on the roster.
+            query = f"sponsor_name:{token}"
             url = f"{feed.url}?{urlencode({'search': query, 'limit': '20'})}"
             try:
                 response = ctx.fetcher.get(url, allow_304=False)
             except Exception as exc:
-                ctx.note(f"[{self.id}] openFDA query failed for {latin}: {exc}")
+                ctx.note(f"[{self.id}] openFDA query failed for {company.name}: {exc}")
                 continue
             if response.status == 404:
                 continue          # openFDA answers 404 for an empty result set
             if not response.ok:
-                ctx.note(f"[{self.id}] openFDA HTTP {response.status} for {latin}")
+                ctx.note(f"[{self.id}] openFDA HTTP {response.status} for {company.name}")
                 continue
             try:
                 payload = response.json()
             except json.JSONDecodeError:
                 continue
             for record in payload.get("results", []) or []:
+                # A single-token query is broad; confirm the sponsor it matched
+                # really is this company before attributing anything to it.
+                if token not in str(record.get("sponsor_name", "")).upper():
+                    continue
                 out.extend(self._from_drugsfda(ctx, company.name, company.tier, record))
         return out
 
@@ -93,6 +128,10 @@ class FdaSource(BaseSource):
             title = f"{company} {app_no} {sub_type} {status}".strip()
             if brand:
                 title = f"{company} {brand} ({app_no}): {sub_type} {status}"
+            # A drugsfda record names the product and nothing else -- no
+            # indication, so nothing for the line tagger to read, and every
+            # approval came through untagged. The indication is in the label.
+            indication = self._indication(ctx, brand) if brand else ""
             item = Item(
                 src=self.id, title=title, url=url, date=status_date,
                 meta={
@@ -104,16 +143,41 @@ class FdaSource(BaseSource):
                     "companies": [company],
                     "company_tier": tier,
                     "regulator": "FDA",
-                    "body": (f"{title}. Application {app_no}, submission {sub_type}, "
-                             f"status {status} dated {status_date}."),
+                    "body": "\n".join(filter(None, [
+                        f"{title}. Application {app_no}, submission {sub_type}, "
+                        f"status {status} dated {status_date}.",
+                        indication])),
+                    "quotable": indication or title,
+                    "indication": indication[:400],
                 },
             )
             if status.upper() == "AP":
+                # The status field states the approval; the record has no prose
+                # saying so, which is why it is recorded structurally.
                 item.study.append("APPROVAL")
+                item.meta["structural_study"] = ["APPROVAL"]
             if ctx.store.is_seen(item.key):
                 continue
             out.append(item)
         return out
+
+    def _indication(self, ctx: Context, brand: str) -> str:
+        """The product's indications-and-usage text, from its label."""
+        if brand in self._labels:
+            return self._labels[brand]
+        query = urlencode({"search": f'openfda.brand_name:"{brand}"', "limit": "1"})
+        text = ""
+        try:
+            response = ctx.fetcher.get(f"{OPENFDA_LABEL}?{query}", allow_304=False)
+            if response.ok:
+                results = response.json().get("results") or []
+                if results:
+                    text = " ".join(
+                        (results[0].get("indications_and_usage") or [""])[0].split())
+        except Exception as exc:
+            log.debug("label lookup failed for %s: %s", brand, exc)
+        self._labels[brand] = text[:4000]
+        return self._labels[brand]
 
     # -- verified FDA feeds / calendars -----------------------------------
     def _feeds(self, ctx: Context) -> list[Item]:

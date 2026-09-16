@@ -266,3 +266,12 @@ def test_financial_guidance_is_still_a_forecast(tagger):
     sentences = tagger.sentence_tags(
         "The company raised full-year guidance and expects Phase 3 data to read out.")
     assert all(s.future for s in sentences)
+
+
+def test_an_approved_indication_is_not_a_cleared_trial(tagger):
+    """A label reading 'this indication is approved under accelerated approval'
+    matched an unbounded `ind`, turning a marketing approval into a cleared
+    trial application."""
+    assert "TRIAL_CLEARANCE" not in tagger.tag_study(
+        "This indication is approved under accelerated approval based on "
+        "improvement of MASH.")
