@@ -188,3 +188,24 @@ def test_operator_notes_never_reach_the_reader(domain_map):
                           notes=["[newswire] no verified endpoint in the registry"])
     assert "no verified endpoint" not in article
     assert "运行提示" not in article
+
+
+def test_reference_line_names_the_source(domain_map):
+    """A registry or literature entry has no company, and was falling back to
+    its date alone -- which tells a reader nothing about where it came from."""
+    item = make(title="Phase 3 trial terminated")
+    item.src = "ctgov"
+    item.meta.pop("companies", None)
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "ClinicalTrials.gov · 2026-09-14" in article
+
+
+def test_registry_fields_render_as_a_record_not_pull_quotes(domain_map):
+    item = make()
+    item.evidence.quotes = [
+        Quote(text="TERMINATED", locator="ClinicalTrials.gov · overallStatus"),
+        Quote(text="Business Reasons", locator="ClinicalTrials.gov · whyStopped"),
+    ]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "overallStatus：" in article and "TERMINATED" in article
+    assert "<blockquote" not in article

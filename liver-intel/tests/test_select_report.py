@@ -101,3 +101,31 @@ def test_out_of_scope_items_are_dropped_not_pooled():
     assert kept == ["MASH trial update"]
     assert "Real estate grand opening" not in kept
     assert any("out of scope" in reason for _, reason in selection.dropped)
+
+
+def test_conference_block_lists_only_verified_meetings(domain_map):
+    from liver_intel.conference import Calendar, Conference
+    from liver_intel.report import conference_lines
+
+    calendar = Calendar(conferences=[
+        Conference(id="A", name="Confirmed Meeting", start="2026-11-05",
+                   end="2026-11-09", late_breaker_release="2026-11-05",
+                   verified=True, source_url="https://example.org/dates"),
+        Conference(id="B", name="Unconfirmed Meeting", verified=False),
+    ])
+    block = "\n".join(conference_lines("2026-09-17", calendar))
+    assert "Confirmed Meeting" in block
+    assert "还有 49 天" in block
+    assert "2026-11-05" in block
+    assert "Unconfirmed Meeting" not in block
+    assert "待核实：B" in block
+
+
+def test_a_finished_meeting_drops_out(domain_map):
+    from liver_intel.conference import Calendar, Conference
+    from liver_intel.report import conference_lines
+
+    calendar = Calendar(conferences=[
+        Conference(id="A", name="Past Meeting", start="2026-05-05", end="2026-05-09",
+                   verified=True)])
+    assert conference_lines("2026-09-17", calendar) == []

@@ -18,6 +18,7 @@ from datetime import date, timedelta
 from typing import Iterable
 
 from .config import BRAND
+from .conference import Calendar
 from .domain_map import DomainMap
 from .grade import SIGNALS
 from .models import Item
@@ -104,6 +105,31 @@ def render_item(item: Item, dm: DomainMap, index: int) -> str:
     return "\n".join(lines)
 
 
+def conference_lines(report_date: str, calendar: Calendar | None = None) -> list[str]:
+    """The conference block: what is coming, and when its abstracts go public.
+
+    Only verified entries appear -- a date nobody confirmed is not a schedule.
+    """
+    calendar = calendar or Calendar.load()
+    upcoming = calendar.upcoming(report_date)
+    if not upcoming:
+        return []
+    out = ["## 会议日历", ""]
+    for conference, days in upcoming:
+        when = "进行中" if days <= 0 else f"还有 {days} 天"
+        out.append(f"- **{conference.name}**（{when}）")
+        out.append(f"  - 会期：{conference.start} 至 {conference.end}")
+        if conference.late_breaker_release:
+            out.append(f"  - late-breaker 摘要解禁：{conference.late_breaker_release}")
+        if conference.source_url:
+            out.append(f"  - 出处：{conference.source_url}")
+    pending = [c.id for c in calendar.unverified]
+    if pending:
+        out.append(f"- 待核实：{'、'.join(pending)}（日期未确认，不生效）")
+    out.append("")
+    return out
+
+
 def daily_markdown(items: list[Item], report_date: str, dm: DomainMap,
                    notes: Iterable[str] = (), weekly_pool_size: int = 0) -> str:
     start, end = coverage_window(report_date)
@@ -143,7 +169,7 @@ def daily_markdown(items: list[Item], report_date: str, dm: DomainMap,
         body.append("今日一手源无达到入选门槛的条目。")
         body.append("")
 
-    tail: list[str] = []
+    tail: list[str] = conference_lines(report_date)
     note_list = [n for n in notes]
     if note_list:
         tail.append("## 运行提示")

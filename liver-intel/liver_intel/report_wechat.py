@@ -22,6 +22,7 @@ import html as html_lib
 from datetime import date
 
 from .config import BRAND, SECTION_NAMES
+from .conference import Calendar
 from .domain_map import DomainMap
 from .images import from_meta
 from .keywords import reader_keywords
@@ -106,26 +107,53 @@ def _figure(item: Item) -> str:
         f'text-align:center;">{esc(caption)}</figcaption></figure>')
 
 
+#: Reader-facing names for where an item came from. Without these a registry or
+#: literature entry falls back to its date alone, which tells a reader nothing.
+SOURCE_NAMES = {
+    "ctgov": "ClinicalTrials.gov",
+    "edgar": "SEC EDGAR",
+    "hkex": "香港交易所披露易",
+    "cninfo": "巨潮资讯",
+    "pubmed": "PubMed",
+    "fda": "FDA",
+    "ema": "EMA",
+    "cn_regulator": "NMPA / CDE",
+    "newsroom": "公司新闻室",
+    "newswire": "通讯社",
+    "society": "学会公告",
+}
+
+
 def _provenance(item: Item) -> str:
     """Publisher line for the reference list -- no adapter or line ids."""
     bits = []
     publisher = (item.meta.get("journal") or item.meta.get("regulator")
-                 or item.meta.get("venue") or item.meta.get("wire"))
+                 or item.meta.get("venue") or item.meta.get("wire")
+                 or item.meta.get("society"))
     companies = item.meta.get("companies") or []
     if companies:
         bits.append("、".join(str(c) for c in companies[:2]))
-    if publisher:
-        bits.append(str(publisher))
+    bits.append(str(publisher) if publisher else SOURCE_NAMES.get(item.src, item.src))
     bits.append(item.date)
-    return " · ".join(bits)
+    return " · ".join(b for b in bits if b)
 
 
 def render_entry(item: Item, dm: DomainMap, index: int) -> str:
     parts = [_entry_title(index, item.title), _figure(item), _keywords(item, dm)]
-    if item.evidence.quotes:
-        for quote in item.evidence.quotes[:3]:
-            parts.append(_quote(quote.text.strip(), quote.translation))
-    else:
+    fields = [q for q in item.evidence.quotes if q.locator.startswith("ClinicalTrials.gov")]
+    prose = [q for q in item.evidence.quotes if q not in fields]
+    if fields:
+        # A registry states its facts in fields. Three one-word pull quotes read
+        # as noise; the same values on one line read as a record.
+        parts.append(
+            f'<p style="{SMALL}">'
+            + "　·　".join(f'{esc(q.locator.split("·")[-1].strip())}：'
+                          f'<span style="color:{INK};">{esc(q.text)}</span>'
+                          for q in fields[:4])
+            + "</p>")
+    for quote in prose[:3]:
+        parts.append(_quote(quote.text.strip(), quote.translation))
+    if not item.evidence.quotes:
         parts.append(f'<p style="{SMALL}">本条未取得可核对的原文片段，详见文末原文链接。</p>')
     if item.meta.get("needs_human_read"):
         parts.append(f'<p style="{SMALL}">本条为公示列表变更，具体条目以原文为准。</p>')
@@ -151,6 +179,28 @@ def _reference_list(items: list[Item]) -> str:
     if figures:
         out.append(
             f'<p style="{SMALL}">配图取自对应源文档自身发布的图片，版权归原发布方所有。</p>')
+    return "".join(out)
+
+
+def _conference_block(report_date: str, calendar: Calendar | None = None) -> str:
+    """Reader-facing conference block: dates, and when abstracts go public."""
+    calendar = calendar or Calendar.load()
+    upcoming = calendar.upcoming(report_date)
+    if not upcoming:
+        return ""
+    out = [_section("会议日历", len(upcoming))]
+    for conference, days in upcoming:
+        when = "进行中" if days <= 0 else f"距开幕 {days} 天"
+        out.append(
+            f'<p style="margin:0 0 6px;font-size:16px;font-weight:600;color:{INK};">'
+            f'{esc(conference.name)}'
+            f'<span style="margin-left:8px;font-size:12px;font-weight:400;color:{ACCENT};">'
+            f'{esc(when)}</span></p>')
+        out.append(f'<p style="{SMALL}">会期 {esc(conference.start)} 至 '
+                   f'{esc(conference.end)}</p>')
+        if conference.late_breaker_release:
+            out.append(f'<p style="{SMALL}">late-breaker 摘要解禁 '
+                       f'{esc(conference.late_breaker_release)}，此前处于禁发期</p>')
     return "".join(out)
 
 
@@ -190,6 +240,8 @@ def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
         for item in bucket:
             index += 1
             out.append(render_entry(item, dm, index))
+
+    out.append(_conference_block(report_date))
 
     if items:
         out.append(f'<div style="height:1px;background:{RULE};margin:34px 0 0;"></div>')

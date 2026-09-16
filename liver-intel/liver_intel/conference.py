@@ -82,6 +82,31 @@ class Calendar:
                 return conference
         return None
 
+    def upcoming(self, today: str, limit: int = 4) -> list[tuple[Conference, int]]:
+        """Verified conferences still ahead, with days remaining.
+
+        A meeting already under way counts as upcoming until it ends; an
+        unverified entry never appears, for the same reason it opens no window.
+        """
+        try:
+            day = date.fromisoformat(today)
+        except ValueError:
+            return []
+        out: list[tuple[Conference, int]] = []
+        for conference in self.conferences:
+            if not conference.usable:
+                continue
+            try:
+                start = date.fromisoformat(conference.start)
+                end = date.fromisoformat(conference.end)
+            except (TypeError, ValueError):
+                continue
+            if end < day:
+                continue
+            out.append((conference, (start - day).days))
+        out.sort(key=lambda pair: pair[1])
+        return out[:limit]
+
     @property
     def unverified(self) -> list[Conference]:
         return [c for c in self.conferences if not c.usable]
