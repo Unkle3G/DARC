@@ -111,3 +111,78 @@ def test_why_is_factual_not_evaluative(tagger, domain_map):
     i = tagger.apply(item("Phase 3 MASH trial met the primary endpoint"))
     result = grade.grade(i, domain_map, today="2026-09-14")
     assert_not_evaluative(result.why, "grade.why")
+
+
+# --- regressions found against live SEC filings ---------------------------
+def test_a_board_appointment_is_not_a_phase3_readout(tagger, domain_map):
+    """A real Madrigal 8-K announced a board appointment. Its 'About Rezdiffra'
+    block mentions a Phase 3 trial and its legal disclaimer mentions regulatory
+    approvals; grading the whole document made it a P0."""
+    body = (
+        "Madrigal Appoints John C. Reed, M.D., Ph.D., to its Board of Directors\n"
+        "CONSHOHOCKEN, Pa. - Madrigal today announced the appointment of John C. Reed.\n"
+        "About Rezdiffra\n"
+        "An ongoing Phase 3 outcomes trial is evaluating Rezdiffra in compensated cirrhosis.\n"
+        "Forward-Looking Statements\n"
+        "risks related to obtaining and maintaining regulatory approvals, including...")
+    i = item("Madrigal Appoints John C. Reed to its Board of Directors", body=body)
+    tagger.apply(i)
+    result = grade.grade(i, domain_map, today="2026-09-14")
+    assert "PH3_RESULT" not in result.signals
+    assert "REG_APPROVAL" not in result.signals
+    assert result.P != "P0"
+
+
+def test_future_readout_is_not_an_event(tagger, domain_map):
+    """'Topline data from Phase 3 ECLIPSE 1 expected in Q4 2026' is a forecast."""
+    body = ("Vir Biotechnology Provides Corporate Update\n"
+            "- Topline data from Phase 3 ECLIPSE 1 trial expected in the fourth "
+            "quarter of 2026")
+    i = item("Vir Biotechnology Provides Corporate Update", body=body)
+    tagger.apply(i)
+    assert "PH3_RESULT" not in grade.grade(i, domain_map, today="2026-09-14").signals
+
+
+def test_facts_from_two_sentences_do_not_merge_into_one_signal(tagger, domain_map):
+    """A Phase 3 that started plus a Phase 2 that read out is not a Phase 3 readout."""
+    body = ("Altimmune Announces Second Quarter 2026 Financial Results\n"
+            "Initiated global PERFORMA Phase 3 trial in MASH\n"
+            "Reported positive topline data from RECLAIM Phase 2 trial in AUD")
+    i = item("Altimmune Announces Second Quarter 2026 Financial Results", body=body)
+    tagger.apply(i)
+    signals = grade.grade(i, domain_map, today="2026-09-14").signals
+    assert "PH3_RESULT" not in signals
+    assert "PH2_RESULT" in signals
+
+
+def test_a_real_phase3_readout_still_fires(tagger, domain_map):
+    body = ("Madrigal Announces Positive Topline Results from the Phase 3 "
+            "MAESTRO-NASH Trial\nThe Phase 3 trial met the primary endpoint of "
+            "MASH resolution on liver biopsy.")
+    i = item("Madrigal Announces Positive Topline Results from the Phase 3 MAESTRO-NASH Trial",
+             body=body)
+    tagger.apply(i)
+    result = grade.grade(i, domain_map, today="2026-09-14")
+    assert "PH3_RESULT" in result.signals and result.P == "P0"
+
+
+def test_quarterly_report_is_capped_to_background(tagger, domain_map):
+    """The events in a quarter's business update were announced on their own;
+    the recap must not be graded as if it broke them."""
+    body = ("Mirum Pharmaceuticals Reports Second Quarter 2026 Financial Results\n"
+            "Reported positive topline data from the Phase 2 study in PBC")
+    i = item("Mirum Pharmaceuticals Reports Second Quarter 2026 Financial Results",
+             body=body)
+    tagger.apply(i)
+    result = grade.grade(i, domain_map, today="2026-09-14")
+    assert result.P == "P2"
+    assert any("periodic financial report" in note for note in result.notes)
+
+
+def test_a_standalone_readout_is_not_capped(tagger, domain_map):
+    body = ("Altimmune Announces Positive Topline Results from RECLAIM Phase 2 Trial "
+            "in MASH\nThe Phase 2 trial met the primary endpoint of MASH resolution.")
+    i = item("Altimmune Announces Positive Topline Results from RECLAIM Phase 2 "
+             "Trial in MASH", body=body)
+    tagger.apply(i)
+    assert grade.grade(i, domain_map, today="2026-09-14").P == "P1"

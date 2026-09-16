@@ -56,6 +56,10 @@ class Line:
 class Company:
     name: str
     ticker: str | None = None
+    #: EDGAR CIK, pinned when the ticker lookup cannot find the company:
+    #: company_tickers.json lists only currently-listed tickers, so an acquired
+    #: or delisted filer drops out of it even though its filings remain.
+    cik: int | None = None
     market: str = ""
     tier: int = 3
     lines: list[str] = field(default_factory=list)

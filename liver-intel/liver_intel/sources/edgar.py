@@ -17,7 +17,7 @@ from typing import Any, Iterable
 
 from ..domain_map import Company
 from ..models import Item, as_iso_date
-from ..textutil import clip, html_to_text
+from ..textutil import clip, html_to_text, lead
 from .base import BaseSource, Context
 
 log = logging.getLogger(__name__)
@@ -26,7 +26,16 @@ WANTED_ITEMS = ("7.01", "8.01", "2.02")
 TICKERS_ID = "sec.company_tickers"
 SUBMISSIONS_ID = "sec.submissions"
 ARCHIVES = "https://www.sec.gov/Archives/edgar/data"
-_EXHIBIT = re.compile(r"^ex[-_]?99", re.I)
+#: Rows of the filing index table: Seq | Description | Document | Type | Size.
+_ROW = re.compile(r"<tr[^>]*>(.*?)</tr>", re.S | re.I)
+_CELL = re.compile(r"<t[dh][^>]*>(.*?)</t[dh]>", re.S | re.I)
+#: A document name inside the Document cell, which can carry trailing notes
+#: such as "mdgl-20260811.htm   iXBRL".
+_DOC_NAME = re.compile(r"[\w.\-]+\.(?:htm|html|txt)", re.I)
+#: Filers name the press-release exhibit whatever they like -- one real filing
+#: called it `pressrelease-boardappointm.htm` -- so it is found by its declared
+#: exhibit TYPE, never by guessing the filename.
+_EX99_TYPE = re.compile(r"^ex-?99", re.I)
 
 
 class EdgarSource(BaseSource):
@@ -59,7 +68,7 @@ class EdgarSource(BaseSource):
 
     def _us_companies(self, ctx: Context) -> list[Company]:
         return [c for c in ctx.domain_map.companies
-                if c.market in ("us", "global") and c.plain_ticker]
+                if c.market in ("us", "global") and (c.plain_ticker or c.cik)]
 
     # -- collection -------------------------------------------------------
     def collect(self, ctx: Context) -> list[Item]:
@@ -68,17 +77,20 @@ class EdgarSource(BaseSource):
             ctx.note(f"[{self.id}] {SUBMISSIONS_ID} is not verified -- skipping EDGAR.")
             return []
 
+        companies = self._us_companies(ctx)
         tickers = self._ticker_map(ctx)
-        if not tickers:
-            return []
+        # No early exit when the lookup comes back empty: a company with a pinned
+        # CIK is still reachable, and one without ends up in ``unresolved`` below,
+        # which is how an operator learns the roster needs a CIK.
 
         items: list[Item] = []
-        for company in self._us_companies(ctx):
+        unresolved: list[str] = []
+        for company in companies:
             entry = tickers.get((company.plain_ticker or "").upper())
-            if entry is None:
-                ctx.note(f"[{self.id}] no CIK for {company.name} ({company.ticker})")
+            cik = company.cik or (entry["cik"] if entry else None)
+            if cik is None:
+                unresolved.append(f"{company.name} ({company.ticker})")
                 continue
-            cik = entry["cik"]
             url = f"{base.url.rstrip('/')}/CIK{cik:010d}.json"
             try:
                 response = ctx.fetcher.get(url, allow_304=False)
@@ -89,6 +101,11 @@ class EdgarSource(BaseSource):
                 ctx.note(f"[{self.id}] submissions HTTP {response.status} for {company.name}")
                 continue
             items.extend(self._filings(ctx, company, cik, json.loads(response.text)))
+        if unresolved:
+            ctx.note(
+                f"[{self.id}] no CIK for: {', '.join(unresolved)}. company_tickers.json "
+                f"lists only currently-listed tickers, so an acquired or delisted "
+                f"filer needs its CIK pinned in the roster.")
         return self.emit(ctx, items)
 
     def _filings(self, ctx: Context, company: Company, cik: int,
@@ -134,7 +151,7 @@ class EdgarSource(BaseSource):
             )
             if ctx.store.is_seen(item.key):
                 continue
-            exhibit_url, body = self._press_release(ctx, cik, folder)
+            exhibit_url, body = self._press_release(ctx, cik, folder, accession)
             if body:
                 item.meta["body"] = clip(body, 40_000)
                 item.meta["exhibit_url"] = exhibit_url
@@ -144,28 +161,26 @@ class EdgarSource(BaseSource):
             out.append(item)
         return out
 
-    def _press_release(self, ctx: Context, cik: int, folder: str) -> tuple[str, str]:
-        """Pull the EX-99.x press release out of the filing folder."""
-        index_url = f"{ARCHIVES}/{cik}/{folder}/index.json"
+    def _press_release(self, ctx: Context, cik: int, folder: str,
+                       accession: str) -> tuple[str, str]:
+        """Pull the EX-99.x press release out of the filing folder.
+
+        The filing index page carries the authoritative Type column, which is
+        the only reliable way to tell which document is the press release.
+        """
+        index_url = f"{ARCHIVES}/{cik}/{folder}/{accession}-index.htm"
         try:
             response = ctx.fetcher.get(index_url, allow_304=False)
         except Exception as exc:
-            log.debug("exhibit index unreachable %s: %s", index_url, exc)
+            log.debug("filing index unreachable %s: %s", index_url, exc)
             return "", ""
         if not response.ok:
             return "", ""
-        try:
-            listing = json.loads(response.text)
-        except json.JSONDecodeError:
-            return "", ""
 
-        names = [entry.get("name", "")
-                 for entry in (listing.get("directory") or {}).get("item", [])]
-        exhibits = [name for name in names
-                    if _EXHIBIT.match(name) and name.lower().endswith((".htm", ".html", ".txt"))]
-        if not exhibits:
+        name = exhibit_name(response.text)
+        if not name:
             return "", ""
-        exhibit_url = f"{ARCHIVES}/{cik}/{folder}/{sorted(exhibits)[0]}"
+        exhibit_url = f"{ARCHIVES}/{cik}/{folder}/{name}"
         try:
             exhibit = ctx.fetcher.get(exhibit_url, allow_304=False)
         except Exception as exc:
@@ -176,14 +191,53 @@ class EdgarSource(BaseSource):
         return exhibit_url, html_to_text(exhibit.text)
 
 
+def exhibit_name(index_html: str) -> str:
+    """Filename of the press-release exhibit, by declared type.
+
+    Prefers EX-99.1 and falls back to any other EX-99.x, which is how a filer
+    that splits the release across exhibits still resolves.
+    """
+    candidates: list[tuple[str, str]] = []
+    for row in _ROW.findall(index_html or ""):
+        cells = [_strip(cell) for cell in _CELL.findall(row)]
+        if len(cells) < 4:
+            continue
+        document, kind = cells[2], cells[3]
+        if not _EX99_TYPE.match(kind):
+            continue
+        match = _DOC_NAME.search(document)
+        if match:
+            candidates.append((kind.upper(), match.group(0)))
+    if not candidates:
+        return ""
+    for kind, name in candidates:
+        if kind in ("EX-99.1", "EX-991", "EX99.1"):
+            return name
+    return candidates[0][1]
+
+
+def _strip(cell: str) -> str:
+    import html as html_lib
+
+    return html_lib.unescape(re.sub(r"<[^>]+>", " ", cell)).strip()
+
+
 def _at(mapping: dict[str, Any], key: str, index: int) -> Any:
     values = mapping.get(key) or []
     return values[index] if index < len(values) else None
 
 
 def _first_headline(body: str) -> str:
-    for line in (body or "").splitlines():
+    """The release's own headline.
+
+    EDGAR prepends the exhibit wrapper -- type, sequence number, filename -- and
+    a filename like `a20260805-q2ex991earningsr.htm` is long enough to look like
+    a headline, which is how one filing ended up titled after its own file.
+    ``lead`` already drops that wrapper.
+    """
+    for line in lead(body, limit=400).splitlines():
         line = line.strip()
-        if len(line) >= 25 and not line.lower().startswith(("exhibit", "ex-99", "for immediate")):
+        if len(line) >= 25 and not line.lower().startswith(("exhibit", "ex-99",
+                                                            "for immediate")):
             return line[:200]
     return ""

@@ -123,11 +123,14 @@ liver programme, 3 is a watchlist name.
 ```json
 [
   {"name": "Madrigal Pharmaceuticals", "ticker": "MDGL", "market": "us", "tier": 1, "lines": ["L3"]},
-  {"name": "Akero Therapeutics", "ticker": "AKRO", "market": "us", "tier": 1, "lines": ["L3", "L5"]},
-  {"name": "89bio", "ticker": "ETNB", "market": "us", "tier": 1, "lines": ["L3"]},
+  {"name": "Akero Therapeutics", "ticker": "AKRO", "cik": 1744659, "market": "us", "tier": 1, "lines": ["L3", "L5"],
+   "note": "CIK pinned (the ticker left company_tickers.json). Filed Form 25-NSE 2025-12-09 and Form 15-12G 2025-12-19, so it is no longer a reporting company and files no 8-K: EDGAR cannot produce anything for it. Its MASH programme now sits with the acquirer -- track that entity instead."},
+  {"name": "89bio", "ticker": "ETNB", "cik": 1785173, "market": "us", "tier": 1, "lines": ["L3"],
+   "note": "CIK pinned, as for Akero. Filed Form 15-12G 2025-11-10; no longer a reporting company, so EDGAR produces nothing."},
   {"name": "Viking Therapeutics", "ticker": "VKTX", "market": "us", "tier": 2, "lines": ["L3"]},
   {"name": "Altimmune", "ticker": "ALT", "market": "us", "tier": 2, "lines": ["L3"]},
-  {"name": "Terns Pharmaceuticals", "ticker": "TERN", "market": "us", "tier": 2, "lines": ["L3"]},
+  {"name": "Terns Pharmaceuticals", "ticker": "TERN", "market": "us", "tier": 2, "lines": ["L3"],
+   "note": "Ticker not found in company_tickers.json during the first live run. Look the CIK up on EDGAR and pin it here -- do not guess one: a guessed CIK resolved to an unrelated company."},
   {"name": "Inventiva", "ticker": "IVA", "market": "eu", "tier": 1, "lines": ["L3"]},
   {"name": "GENFIT", "ticker": "GNFT", "market": "eu", "tier": 1, "lines": ["L4", "L7"]},
   {"name": "Mirum Pharmaceuticals", "ticker": "MIRM", "market": "us", "tier": 1, "lines": ["L4", "L11"]},

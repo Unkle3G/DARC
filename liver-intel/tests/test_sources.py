@@ -88,9 +88,14 @@ def test_edgar_filters_to_the_wanted_8k_items(store, fake_fetcher, domain_map):
             "reportDate": ["2026-09-14", "2026-09-10", "2026-09-09"],
         }}}))
     folder = "https://www.sec.gov/Archives/edgar/data/1157601/000126000001"
-    fake_fetcher.add(f"{folder}/index.json", json.dumps({
-        "directory": {"item": [{"name": "a.htm"}, {"name": "ex991.htm"}]}}))
-    fake_fetcher.add(f"{folder}/ex991.htm",
+    # Filers name the exhibit freely; it is identified by its declared Type.
+    fake_fetcher.add(f"{folder}/0001-26-000001-index.htm", """
+        <table>
+        <tr><th>Seq</th><th>Description</th><th>Document</th><th>Type</th><th>Size</th></tr>
+        <tr><td>1</td><td>8-K</td><td>a.htm&nbsp;iXBRL</td><td>8-K</td><td>1</td></tr>
+        <tr><td>2</td><td>EX-99.1</td><td>pressrelease-topline.htm</td><td>EX-99.1</td><td>2</td></tr>
+        </table>""")
+    fake_fetcher.add(f"{folder}/pressrelease-topline.htm",
                      "<p>EXHIBIT 99.1</p><p>Madrigal Announces Phase 3 Topline Results</p>")
 
     ctx = context(store, fake_fetcher, domain_map, [tickers, subs])
@@ -98,7 +103,7 @@ def test_edgar_filters_to_the_wanted_8k_items(store, fake_fetcher, domain_map):
     assert len(items) == 1                      # only the 7.01 filing
     assert items[0].meta["edgar_items"] == ["7.01"]
     assert "Phase 3 Topline" in items[0].title
-    assert items[0].meta["exhibit_url"].endswith("ex991.htm")
+    assert items[0].meta["exhibit_url"].endswith("pressrelease-topline.htm")
     assert items[0].meta["src_kind"] == "filing"
 
 
@@ -283,3 +288,91 @@ def test_field_evidence_is_verifiable_against_the_quotable_text(store, fake_fetc
         ctx, study(status="TERMINATED", why="Business Reasons"))
     quotable = "\n".join([item.title, item.meta["quotable"]])
     assert validate_quotes(item, quotable) == []
+
+
+def test_exhibit_is_found_by_type_not_filename():
+    """A real Madrigal 8-K named its press release `pressrelease-boardappointm.htm`;
+    matching on an `ex99*` filename found nothing at all."""
+    from liver_intel.sources.edgar import exhibit_name
+
+    index = """<table>
+      <tr><th>Seq</th><th>Description</th><th>Document</th><th>Type</th><th>Size</th></tr>
+      <tr><td>1</td><td>8-K</td><td>mdgl-20260811.htm&nbsp;&nbsp;iXBRL</td><td>8-K</td><td>31809</td></tr>
+      <tr><td>2</td><td>EX-99.1</td><td>pressrelease-boardappointm.htm</td><td>EX-99.1</td><td>12207</td></tr>
+      <tr><td>6</td><td></td><td>imagea.jpg</td><td>GRAPHIC</td><td>10012</td></tr>
+    </table>"""
+    assert exhibit_name(index) == "pressrelease-boardappointm.htm"
+
+
+def test_ex99_1_wins_over_other_exhibits():
+    from liver_intel.sources.edgar import exhibit_name
+
+    index = """<table>
+      <tr><td>2</td><td>EX-99.2</td><td>slides.htm</td><td>EX-99.2</td><td>1</td></tr>
+      <tr><td>3</td><td>EX-99.1</td><td>release.htm</td><td>EX-99.1</td><td>2</td></tr>
+    </table>"""
+    assert exhibit_name(index) == "release.htm"
+
+
+def test_filing_without_an_exhibit_yields_nothing():
+    from liver_intel.sources.edgar import exhibit_name
+
+    assert exhibit_name(
+        "<table><tr><td>1</td><td>8-K</td><td>a.htm</td><td>8-K</td><td>1</td></tr></table>") == ""
+
+
+def test_headline_skips_the_exhibit_wrapper_but_finds_the_real_one():
+    """`lead` must offer several lines: taking only the first left one filing
+    titled `8-K` because its opening line was the wrapper."""
+    from liver_intel.sources.edgar import _first_headline
+
+    body = ("EX-99.1\n2\na20260805-q2ex991earningsr.htm\nEX-99.1\n\nExhibit 99.1\n\n"
+            "Altimmune Announces Positive Topline Results from RECLAIM Phase 2 Trial")
+    assert _first_headline(body).startswith("Altimmune Announces Positive Topline")
+
+
+def test_headline_is_empty_when_there_is_none():
+    from liver_intel.sources.edgar import _first_headline
+
+    assert _first_headline("EX-99.1\n2\nshort.htm") == ""
+
+
+def test_a_pinned_cik_survives_delisting(store, fake_fetcher, domain_map):
+    """company_tickers.json lists only currently-listed tickers, so an acquired
+    filer disappears from it while its filings remain."""
+    from liver_intel.domain_map import Company
+
+    tickers = Feed(id="sec.company_tickers",
+                   url="https://www.sec.gov/files/company_tickers.json",
+                   source="edgar", status="verified")
+    subs = Feed(id="sec.submissions", url="https://data.sec.gov/submissions/",
+                source="edgar", status="verified")
+    fake_fetcher.add(tickers.url, json.dumps({}))          # ticker is gone
+    fake_fetcher.add("https://data.sec.gov/submissions/CIK0001744659.json", json.dumps({
+        "filings": {"recent": {
+            "form": ["8-K"], "items": ["7.01"], "filingDate": ["2026-09-14"],
+            "accessionNumber": ["0001-26-000001"], "primaryDocument": ["a.htm"],
+            "primaryDocDescription": ["8-K"], "reportDate": ["2026-09-14"]}}}))
+    fake_fetcher.add("https://www.sec.gov/Archives/edgar/data/1744659/", "")
+
+    ctx = context(store, fake_fetcher, domain_map, [tickers, subs])
+    ctx.domain_map.companies = [Company(name="Akero Therapeutics", ticker="AKRO",
+                                        cik=1744659, market="us", tier=1)]
+    items = EdgarSource().run(ctx)
+    assert len(items) == 1
+    assert items[0].meta["cik"] == 1744659
+
+
+def test_unresolved_companies_are_named_once(store, fake_fetcher, domain_map):
+    from liver_intel.domain_map import Company
+
+    tickers = Feed(id="sec.company_tickers",
+                   url="https://www.sec.gov/files/company_tickers.json",
+                   source="edgar", status="verified")
+    subs = Feed(id="sec.submissions", url="https://data.sec.gov/submissions/",
+                source="edgar", status="verified")
+    fake_fetcher.add(tickers.url, json.dumps({}))
+    ctx = context(store, fake_fetcher, domain_map, [tickers, subs])
+    ctx.domain_map.companies = [Company(name="Gone Inc", ticker="GONE", market="us")]
+    assert EdgarSource().run(ctx) == []
+    assert any("no CIK for: Gone Inc" in note for note in ctx.notes)

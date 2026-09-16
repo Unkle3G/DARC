@@ -200,6 +200,7 @@ class CtGovSource(BaseSource):
         )
         if current.results_first_posted and results_are_new:
             item.study.append("TOPLINE")
+        item.meta["structural_study"] = list(item.study)
         return item
 
 

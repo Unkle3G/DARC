@@ -8,6 +8,7 @@ that fired.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Iterable
@@ -51,6 +52,23 @@ BACKGROUND_SIGNALS = {k for k, v in SIGNALS.items() if v["weight"] == "backgroun
 
 BASE_SCORE = {"P0": 10.0, "P1": 6.0, "P2": 3.0, "P3": 1.0}
 
+#: A quarterly or annual report recaps a period; the events in its business
+#: update already happened and were announced on their own. Reading one as if it
+#: broke that news double-counts it -- the same Phase 2 readout showed up once as
+#: its own release and again in the quarter's summary two weeks later.
+_PERIODIC_TITLE = re.compile(
+    r"(?i)\b(?:first|second|third|fourth|1st|2nd|3rd|4th|full[- ]year|fiscal)\s+"
+    r"(?:quarter|half|year)\b|\bq[1-4]\s+\d{4}\b|\b(?:quarterly|annual) results\b"
+    r"|\bfinancial results\b|\bresults of operations\b|业绩|季度报告|年度报告")
+
+
+def is_periodic_report(item: Item) -> bool:
+    """True when the document is a periodic financial report."""
+    if _PERIODIC_TITLE.search(item.title or ""):
+        return True
+    edgar_items = item.meta.get("edgar_items") or []
+    return edgar_items == ["2.02"]
+
 
 @dataclass
 class GradeResult:
@@ -63,8 +81,44 @@ class GradeResult:
 
 
 def rule_signals(item: Item) -> list[str]:
-    """Signals derivable from layer-2 tags without any model call."""
-    study = set(item.study)
+    """Signals derivable from layer-2 tags without any model call.
+
+    A signal is a claim about one event, so it is assembled from the tags of a
+    single statement. Two facts in two different sentences -- a Phase 3 trial
+    started, a Phase 2 trial read out -- are not a Phase 3 readout, and a
+    sentence in the future tense is not an event at all.
+
+    ``meta.sentence_tags`` carries those per-sentence sets. Adapters that state
+    their facts structurally rather than in prose (the trial registry) put theirs
+    in ``meta.structural_study``, and that group is read the same way.
+    """
+    sentences = item.meta.get("sentence_tags")
+    groups: list[set[str]] = []
+    for entry in sentences or []:
+        if entry.get("future"):
+            continue
+        tags = set(entry.get("tags") or [])
+        if tags:
+            groups.append(tags)
+    structural = set(item.meta.get("structural_study") or [])
+    if structural:
+        groups.append(structural)
+    if not groups and sentences is None and not structural:
+        # No per-statement breakdown was produced at all: fall back to the
+        # document's tags. Note the condition -- once a breakdown exists, an
+        # empty result means every statement was in the future tense, and
+        # falling back would resurrect exactly the event the tense ruled out.
+        groups = [set(item.study)]
+
+    out: list[str] = []
+    for study in groups:
+        for signal in _signals_for(study, item):
+            if signal not in out:
+                out.append(signal)
+    return out
+
+
+def _signals_for(study: set[str], item: Item) -> list[str]:
     out: list[str] = []
 
     phase3 = "PHASE3" in study
@@ -109,7 +163,6 @@ def rule_signals(item: Item) -> list[str]:
             out.append("EARLY_RESULT")
         elif study & {"ENROLMENT", "PHASE2", "PHASE3", "PHASE4"}:
             out.append("TRIAL_PROGRESS")
-    # de-duplicate, keep order
     seen: set[str] = set()
     return [s for s in out if not (s in seen or seen.add(s))]
 
@@ -174,6 +227,12 @@ def grade(item: Item, dm: DomainMap | None = None, today: str | None = None,
     priority = priority_for(signals)
     main_hit = any(line in MAIN_LINES for line in item.lines)
     notes: list[str] = []
+
+    if priority in ("P0", "P1") and is_periodic_report(item):
+        notes.append(
+            f"periodic financial report: capped from {priority} to P2, its events "
+            "were announced separately")
+        priority = "P2"
 
     if not item.lines:
         priority = "P3"

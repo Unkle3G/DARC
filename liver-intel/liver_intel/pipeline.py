@@ -88,7 +88,8 @@ def enrich(items: Iterable[Item], ctx: Context, judge: llm.Judge,
         # fetched document and is quotable as it stands.
         quotable = "\n".join(filter(None, [
             item.title,
-            str(item.meta.get("quotable") or item.meta.get("body") or ""),
+            str(item.meta.get("quotable") or item.meta.get("lead")
+                or item.meta.get("body") or ""),
             str(item.meta.get("summary") or ""),
         ]))
         llm.apply(item, quotable, judge)

@@ -22,6 +22,7 @@ from typing import Iterable, Sequence
 
 from .domain_map import Company, DomainMap, Kol, load_cached
 from .models import Item
+from .textutil import lead
 
 # --- layer 2 vocabulary ---------------------------------------------------
 # (tag, english patterns, chinese patterns).  English patterns are matched with
@@ -111,6 +112,27 @@ _DRUG_CODE = re.compile(r"\b([A-Z]{2,5}[- ]?\d{2,5}[A-Za-z]?)\b")
 _INN_SUFFIX = re.compile(
     r"\b([a-z][a-z\-]{4,}(?:tide|mab|nib|stat|siran|vir|prazole|fexor|glitazar|"
     r"delpar|branor|rasib|ciclib|zumab|ximab|umab))\b", re.I)
+
+
+#: A statement about something that has not happened yet is not an event.
+FUTURE_TENSE = re.compile(
+    r"(?i)\b(?:expected|expects?|anticipat\w+|plans? to|planned|will\s+\w+|"
+    r"on track|upcoming|projected|guidance|targeting|intends? to|"
+    r"to be (?:reported|presented|initiated|completed)|later this year|"
+    r"in the (?:first|second|third|fourth) quarter of \d{4})\b"
+    r"|预计|计划|拟于|将于|有望")
+
+
+@dataclass
+class SentenceTags:
+    """Study tags carried by one sentence, and whether it is about the future."""
+
+    text: str
+    tags: set[str]
+    future: bool
+
+    def to_json(self) -> dict[str, object]:
+        return {"text": self.text, "tags": sorted(self.tags), "future": self.future}
 
 
 @dataclass
@@ -236,6 +258,25 @@ class Tagger:
         sentence = text[start: end if end != -1 else len(text)]
         return bool(WITHDRAWAL_CONTEXT.search(sentence))
 
+    def sentence_tags(self, text: str) -> list[SentenceTags]:
+        """Per-sentence study tags.
+
+        Signals are assembled per sentence rather than per document: one release
+        read "Initiated global PERFORMA Phase 3 trial" in one line and "Reported
+        positive topline data from RECLAIM Phase 2 trial" in the next, and
+        pooling the document's tags turned that into a Phase 3 readout nobody
+        announced.
+        """
+        out: list[SentenceTags] = []
+        for sentence in _split_sentences(text or ""):
+            tags = {tag for tag, pattern in self._study if pattern.search(sentence)}
+            if "SUBMISSION" in tags and WITHDRAWAL_CONTEXT.search(sentence):
+                tags.discard("SUBMISSION")
+            if tags:
+                out.append(SentenceTags(sentence, tags,
+                                        bool(FUTURE_TENSE.search(sentence))))
+        return out
+
     # -- layer 3 ---------------------------------------------------------
     def tag_entities(self, text: str) -> tuple[list[Company], list[str], list[Kol]]:
         companies = [c for c, pattern in self._companies if pattern.search(text)]
@@ -304,13 +345,37 @@ class Tagger:
         return out
 
     def apply(self, item: Item, extra_text: str = "") -> Item:
-        """Tag an item in place from its title, body and metadata."""
+        """Tag an item in place from its title, body and metadata.
+
+        Lines are read from the whole document -- what a release is *about* can
+        be established anywhere in it. Study tags are read from the lead only,
+        because what a release *announces* is stated at the top: a quarterly
+        report that recaps a past readout in a bullet on page three has not
+        announced that readout today, and grading must not treat it as though
+        it had.
+        """
         body = item.meta.get("body", "") or ""
         blob = "\n".join(filter(None, [item.title, body, extra_text,
                                        str(item.meta.get("summary", ""))]))
+        head = item.meta.get("lead")
+        if head is None:
+            head = lead(body) if body else ""
+            item.meta["lead"] = head
+        headline_blob = "\n".join(filter(None, [item.title, head,
+                                                str(item.meta.get("summary", ""))]))
+
         result = self.tag_text(blob)
+        sentences = self.sentence_tags(headline_blob)
+        item.meta["sentence_tags"] = [st.to_json() for st in sentences]
+        announced = sorted({tag for st in sentences for tag in st.tags})
+        mentioned = sorted(set(result.study) - set(announced))
+
         item.lines = result.lines
-        item.study = sorted(set(item.study) | set(result.study))
+        item.study = sorted(set(item.study) | set(announced))
+        if mentioned:
+            # Kept for the internal report: stated somewhere in the document,
+            # but not what it announces.
+            item.meta["study_mentioned"] = mentioned
         meta = item.meta
         if result.companies:
             meta["companies"] = result.companies

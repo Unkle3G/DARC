@@ -52,3 +52,54 @@ def html_to_text(html: str) -> str:
 def clip(text: str, limit: int = 4000) -> str:
     text = text or ""
     return text if len(text) <= limit else text[:limit] + "\n[truncated]"
+
+
+#: Where a press release stops reporting and starts repeating itself. Everything
+#: from here on is legal and marketing furniture that appears in every release:
+#: the forward-looking-statements disclaimer names approvals and trials for
+#: legal reasons, and the "About <product>" block recaps the whole programme.
+#: Quoting either as evidence of today's news is simply wrong -- one real filing
+#: announced a board appointment and was graded a Phase 3 readout on the
+#: strength of its boilerplate.
+_BOILERPLATE = re.compile(
+    r"(?im)^\s*(?:"
+    r"forward[- ]looking statements?"
+    r"|safe harbou?r statement"
+    r"|cautionary (?:note|statement)"
+    r"|about\s+\S[^\n]{0,60}$"
+    r"|investor (?:relations|contacts?|inquiries)"
+    r"|media (?:relations|contacts?|inquiries)"
+    r"|press contacts?"
+    r"|source:\s"
+    r"|#\s*#\s*#"
+    r")")
+
+#: Exhibit wrappers EDGAR prepends before the release itself.
+_EXHIBIT_PREAMBLE = re.compile(
+    r"(?im)^\s*(?:ex-?99[.\d]*|exhibit\s+99[.\d]*|press release|\d{1,2}|[\w.\-]+\.html?)\s*$")
+
+
+def strip_boilerplate(text: str) -> str:
+    """The reporting part of a release, with legal and marketing blocks removed."""
+    match = _BOILERPLATE.search(text or "")
+    return (text[: match.start()] if match else (text or "")).strip()
+
+
+def lead(text: str, limit: int = 600) -> str:
+    """Headline plus opening paragraphs -- what the document announces.
+
+    A press release states its news at the top; what appears further down is
+    recap and background. Grading reads this, not the whole document, so a
+    quarterly report does not inherit every event it mentions in passing.
+    """
+    body = strip_boilerplate(text)
+    lines = [line for line in body.splitlines()
+             if line.strip() and not _EXHIBIT_PREAMBLE.match(line)]
+    out: list[str] = []
+    size = 0
+    for line in lines:
+        out.append(line.strip())
+        size += len(line)
+        if size >= limit:
+            break
+    return "\n".join(out)
