@@ -44,8 +44,11 @@ def select_daily(items: list[Item], cap: int = 10) -> Selection:
 
     for item in items:
         if not item.lines:
-            selection.weekly.append(item)
-            selection.dropped.append((item, "no line matched"))
+            # Out of scope, not lower priority: a wire's category feed carries
+            # every industry, and a release that matches no disease line is not
+            # liver intelligence at all. Pooling it would fill the weekly digest
+            # with real-estate and insurance announcements.
+            selection.dropped.append((item, "no line matched: out of scope"))
             continue
         if item.P == "P3":
             selection.weekly.append(item)

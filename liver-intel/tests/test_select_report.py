@@ -89,3 +89,15 @@ def test_weekly_digest_lists_pool(domain_map):
     body = weekly_markdown(items, "2026-09-18", domain_map)
     assert "P2 1 条" in body and "P3 1 条" in body
     assert "https://www.example.com/P21" in body
+
+
+def test_out_of_scope_items_are_dropped_not_pooled():
+    """A wire's category feed carries every industry. A release matching no
+    disease line is not liver intelligence, so it must not reach the digest."""
+    items = [make("P3", 1, [], 1, title="Real estate grand opening"),
+             make("P2", 3, ["L3"], 2, title="MASH trial update")]
+    selection = select_daily(items)
+    kept = [i.title for i in selection.daily + selection.weekly]
+    assert kept == ["MASH trial update"]
+    assert "Real estate grand opening" not in kept
+    assert any("out of scope" in reason for _, reason in selection.dropped)

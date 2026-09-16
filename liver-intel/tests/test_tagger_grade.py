@@ -186,3 +186,30 @@ def test_a_standalone_readout_is_not_capped(tagger, domain_map):
              "Trial in MASH", body=body)
     tagger.apply(i)
     assert grade.grade(i, domain_map, today="2026-09-14").P == "P1"
+
+
+# --- regressions found against live newswire feeds -------------------------
+def test_generic_ai_mention_does_not_fire_the_ai_line(tagger):
+    """A wire's general-business feed put 34 releases into the digest because
+    every corporate mention of artificial intelligence matched L13."""
+    lines, gated = tagger.tag_lines(
+        "Eight Rubin Rudman Partners Named to 2026 Lawdragon 500 for their "
+        "artificial intelligence practice")
+    assert "L13" not in lines and "L13" in gated
+
+
+def test_ai_line_fires_with_liver_context(tagger):
+    lines, _ = tagger.tag_lines(
+        "A deep learning model scored fibrosis stage on liver biopsy slides in MASH")
+    assert "L13" in lines
+
+
+def test_generic_microbiome_mention_is_gated(tagger):
+    lines, gated = tagger.tag_lines(
+        "Kibow Biotech Wins 2026 WebAward for Best Science Website on microbiome research")
+    assert "L15" not in lines and "L15" in gated
+
+
+def test_microbiome_with_liver_context_fires(tagger):
+    lines, _ = tagger.tag_lines("Microbiome shifts drive the gut-liver axis in cirrhosis")
+    assert "L15" in lines

@@ -22,7 +22,6 @@ FEED_TYPES = ("application/rss+xml", "application/atom+xml", "application/feed+j
               "application/json")
 _FEEDISH = re.compile(r"(?:^|/)(?:rss|feed|feeds|atom)(?:[./?]|$)|\.(?:rss|atom)$", re.I)
 
-
 class _LinkScraper(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -84,7 +83,43 @@ def scrape_page(html: str, base_url: str) -> list[tuple[str, str, str]]:
     return out
 
 
-def discover(root: Feed, fetcher: Fetcher, include_sitemap: bool = True) -> list[Feed]:
+#: Feed paths embedded in inline JSON or JS rather than in markup. PR Newswire
+#: renders its feed directory client-side, so every address sits in the page as
+#: an escaped JSON string ("\\/rss\\/health\\u002Dlatest\\u002Dnews...") and a scrape
+#: of anchors and <link> tags comes back empty from a page listing dozens of feeds.
+_EMBEDDED_FEED = re.compile(r"(?:https?://[\w.\-]+)?/[\w\-/.]*\.(?:rss|atom)\b", re.I)
+
+_JSON_ESCAPES = (("\\/", "/"), ("\\u002D", "-"), ("\\u002d", "-"),
+                 ("\\u0026", "&"), ("\\u003D", "="), ("\\u003d", "="))
+
+
+def unescape_embedded(text: str) -> str:
+    """Undo the JSON string escaping a page applies to embedded URLs."""
+    for escape, char in _JSON_ESCAPES:
+        text = text.replace(escape, char)
+    return text
+
+
+def embedded_feeds(html: str, base_url: str) -> list[str]:
+    """Feed URLs written into the page's own JSON or JS payloads."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for match in _EMBEDDED_FEED.finditer(unescape_embedded(html or "")):
+        url = urljoin(base_url, match.group(0))
+        if url in seen or urlparse(url).scheme not in ("http", "https"):
+            continue
+        seen.add(url)
+        out.append(url)
+    return out
+
+
+#: A page whose job is to list feeds. Worth following one level: the feed
+#: directory is usually a click away from the homepage, not on it.
+_FEED_INDEX = re.compile(r"(?:^|/)(?:rss|feeds?)/?$", re.I)
+
+
+def discover(root: Feed, fetcher: Fetcher, include_sitemap: bool = True,
+             follow_index: bool = True) -> list[Feed]:
     """Probe one discovery root and return candidate feeds."""
     candidates: list[Feed] = []
     try:
@@ -106,6 +141,27 @@ def discover(root: Feed, fetcher: Fetcher, include_sitemap: bool = True) -> list
             src_kind=root.src_kind, status="unverified", company=root.company,
             note=f"discovered from {root.url} ({label})",
         ))
+
+    if follow_index:
+        # Follow a feed-directory link one level down, then stop: this is feed
+        # discovery, not a crawl.
+        for url, _, _ in list(scrape_page(response.text, root.url)):
+            if not _FEED_INDEX.search(urlparse(url).path):
+                continue
+            try:
+                page = fetcher.get(url, allow_304=False)
+            except Exception as exc:
+                log.debug("feed index unreadable %s: %s", url, exc)
+                continue
+            if not page.ok:
+                continue
+            for index, found in enumerate(embedded_feeds(page.text, url)):
+                candidates.append(Feed(
+                    id=f"{root.id}.index.{index:02d}", url=found, task=root.task,
+                    source=root.source, kind="rss", src_kind=root.src_kind,
+                    status="unverified", company=root.company,
+                    note=f"listed on {url}"))
+            break
 
     if include_sitemap:
         sitemap = f"https://{host}/sitemap.xml"

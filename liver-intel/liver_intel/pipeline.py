@@ -160,10 +160,12 @@ def run_daily(settings: Settings, today: str | None = None, since: str | None = 
             selection = select.select_daily(items, cap=settings.daily_cap)
             for item in selection.weekly:
                 store.push_weekly(item)
-            for item in selection.daily:
-                store.mark_seen(item, published_on=today)
-            for item in selection.weekly:
-                store.mark_seen(item)
+            published = {item.key for item in selection.daily}
+            for item in items:
+                # Everything collected is recorded, including what was dropped as
+                # out of scope: otherwise the next run fetches those bodies again
+                # and the collected count never settles.
+                store.mark_seen(item, published_on=today if item.key in published else None)
             # The materials library keeps everything collected, not just what
             # shipped: the point is later retrieval and roll-ups.
             recorded = sum(store.record_contributors(item) for item in items)

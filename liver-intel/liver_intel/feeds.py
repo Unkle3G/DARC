@@ -13,6 +13,7 @@ The registry is a JSON file of *candidates*.  Each entry carries a ``status``:
 ``unreachable``    could not be probed at all (DNS, proxy, timeout) -- says nothing
                    about the endpoint itself, so the next run retries it
 ``blocked``        probed and refused (403/451) -- an operator decision, not a retry
+``ignored``        reachable and valid, but deliberately not collected from
 
 :func:`usable` is what the collectors call, and it returns ``verified`` entries
 only unless the operator explicitly passes ``allow_unverified``.
@@ -28,7 +29,7 @@ from typing import Any, Iterable
 from .config import FEED_REGISTRY
 
 STATUSES = ("discover_root", "unverified", "verified", "dead", "unreachable",
-            "blocked")
+            "blocked", "ignored")
 
 
 @dataclass
@@ -133,6 +134,10 @@ class Registry:
         if existing is None:
             self.entries.append(feed)
             return feed
+        if existing.status in ("ignored", "blocked"):
+            # An operator decision outlives a rediscovery: re-running discover
+            # must not quietly put a feed back into the collection set.
+            return existing
         for key, value in feed.to_json().items():
             if value not in (None, "", [], {}) or key in ("status", "note"):
                 setattr(existing, key, value)

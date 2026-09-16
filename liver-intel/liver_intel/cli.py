@@ -213,6 +213,24 @@ def cmd_feeds_add(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_feeds_ignore(args: argparse.Namespace) -> int:
+    """Stop collecting from a feed without pretending it is broken."""
+    registry = Registry.load()
+    changed = []
+    for feed_id in args.id:
+        feed = registry.by_id(feed_id)
+        if feed is None:
+            print(f"no such feed: {feed_id}", file=sys.stderr)
+            continue
+        feed.status = "ignored" if not args.undo else "unverified"
+        feed.note = args.reason or ("not collected from" if not args.undo
+                                    else "re-enabled, pending verification")
+        changed.append(feed.id)
+    registry.save()
+    print(f"{'ignored' if not args.undo else 're-enabled'}: {', '.join(changed)}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="liver-intel",
                                      description=__doc__,
@@ -246,6 +264,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keyword", action="append", help="repeatable")
     p.add_argument("--note")
     p.set_defaults(func=cmd_feeds_add)
+
+    p = sub.add_parser("feeds-ignore", help="stop collecting from a feed")
+    p.add_argument("--id", action="append", required=True, help="repeatable")
+    p.add_argument("--reason")
+    p.add_argument("--undo", action="store_true")
+    p.set_defaults(func=cmd_feeds_ignore)
 
     p = sub.add_parser("status", help="registry, roster coverage and calendar state")
     p.set_defaults(func=cmd_status)
