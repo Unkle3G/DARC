@@ -22,6 +22,7 @@ from .models import Item, Quote, dedup, today_iso
 from .sources import Context, build_sources
 from .store import Store
 from .tagger import Tagger
+from .workdays import Verdict, verdict as workday_verdict
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +34,8 @@ class RunResult:
     daily: list[Item] = field(default_factory=list)
     weekly: list[Item] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    #: Set when the calendar said this is not a working day and nothing ran.
+    skipped: Verdict | None = None
     report_path: Path | None = None
     json_path: Path | None = None
     wechat_path: Path | None = None
@@ -176,9 +179,19 @@ def _collapse(notes: list[str]) -> list[str]:
 def run_daily(settings: Settings, today: str | None = None, since: str | None = None,
               only: list[str] | None = None, use_llm: bool = True,
               write: bool = True, wechat: bool = False,
-              with_images: bool = False) -> RunResult:
+              with_images: bool = False, ignore_calendar: bool = False) -> RunResult:
     settings.ensure_dirs()
     today = today or today_iso(settings.report_tz)
+    if not ignore_calendar:
+        # Monday to Friday, minus Chinese public holidays. Checked here rather
+        # than only in the shell runner, so a hand-typed run on a holiday says
+        # so instead of quietly producing a report nobody wanted.
+        decision = workday_verdict(today)
+        if not decision.run:
+            return RunResult(report_date=today, skipped=decision,
+                             notes=[f"未运行：{decision.reason}"])
+    else:
+        decision = None
     since = since or default_since(today)
     result = RunResult(report_date=today)
     window_start, _ = report.coverage_window(today)
@@ -186,6 +199,8 @@ def run_daily(settings: Settings, today: str | None = None, since: str | None = 
     with Store(settings.db_path) as store:
         ctx = build_context(settings, store, today, since=since)
         ctx.note(f"collection window opens {since}; report covers {window_start} to {today}")
+        if not ignore_calendar and decision.unverified:
+            ctx.note(decision.reason)
         with store.run("daily") as stats:
             items = collect(ctx, only=only)
             result.collected = len(items)
@@ -242,7 +257,18 @@ def run_daily(settings: Settings, today: str | None = None, since: str | None = 
                 "no figure could be downloaded; the article falls back to remote URLs")
 
         if write:
-            _write_outputs(settings, result, ctx.domain_map, wechat=wechat)
+            existing = settings.out_dir / f"liver_daily_{today}.json"
+            if not result.daily and existing.exists() and \
+                    json.loads(existing.read_text(encoding="utf-8")):
+                # Everything collected earlier today is already in seen_items,
+                # so a second run finds nothing -- and writing that out would
+                # replace the morning's report with an empty one. Re-render
+                # instead: `liver-intel render --date <date>`.
+                result.notes.append(
+                    f"已存在 {today} 的报告且本次无新条目，未覆盖；"
+                    f"如需重新出稿请用 render --date {today}")
+            else:
+                _write_outputs(settings, result, ctx.domain_map, wechat=wechat)
     return result
 
 

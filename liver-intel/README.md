@@ -240,8 +240,25 @@ The daily run writes both `out/liver_daily_<date>.md` and `.json`.
 ## Deployment
 
 `scripts/run_daily.sh` runs the daily collection and adds the weekly digest on
-Fridays; `scripts/crontab.example` has the schedule (06:30 Beijing, Mon–Fri, plus
-a weekly re-verification of the registry). State lives in SQLite at
+Fridays; `scripts/crontab.example` has the schedule (03:00 Beijing, Mon–Fri,
+plus a weekly re-verification of the registry).
+
+**Which days it runs.** Monday to Friday, minus Chinese public holidays. That
+is not a weekday test — the State Council moves holidays and designates make-up
+working days (调休) — so the dates come from `data/holidays_cn.json`, which
+records the notice it was taken from. `liver-intel workday` answers the question
+on its own (exit 0 / 1) and the runner calls it first; `daily` checks it too, so
+a hand-typed run on a holiday says so rather than quietly producing a report
+nobody wanted. `--ignore-calendar` overrides. A year missing from the file is
+**not** an error: the run falls back to Monday–Friday and prints the fallback
+into 运行提示, because losing every day of intelligence to a stale file is worse
+than one unnecessary run. A 调休 Saturday does not run unless
+`follow_makeup_workdays` is set true.
+
+**Re-running a day.** Everything collected is in `seen_items`, so a second
+`daily` on the same date finds nothing new. The engine refuses to overwrite a
+non-empty report with that empty result and says so; to re-issue the day's
+article use `liver-intel render --date <date>`. State lives in SQLite at
 `data/state.sqlite3`: NCT status, published items, page hashes and the weekly
 pool.
 

@@ -4,6 +4,7 @@
     liver-intel verify   [--source S]     probe candidates, promote to verified
     liver-intel status                    registry / roster coverage / calendar
     liver-intel daily    [--since D]      collect, grade, write the daily report
+    liver-intel workday                   does the daily run today? (exit 0 / 1)
     liver-intel weekly                    drain the pool into the Friday digest
     liver-intel backfill --since D        historical sweep (acceptance testing)
 """
@@ -27,6 +28,7 @@ from .models import today_iso
 from .pipeline import render, run_daily, run_weekly
 from .preflight import check as preflight_check, summarise as preflight_summary
 from .store import Store
+from .workdays import verdict as workday_verdict
 from .verify import verify_registry
 
 
@@ -103,12 +105,23 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_workday(args: argparse.Namespace) -> int:
+    """Is today a day the daily runs? Exit 0 yes, 1 no -- for the cron script."""
+    decision = workday_verdict(args.date or today_iso(Settings().report_tz))
+    print(decision.reason)
+    return 0 if decision.run else 1
+
+
 def cmd_daily(args: argparse.Namespace) -> int:
     settings = _settings(args)
     result = run_daily(settings, today=args.date, since=args.since,
                        only=args.source.split(",") if args.source else None,
                        use_llm=not args.no_llm, write=not args.dry_run,
-                       wechat=args.wechat, with_images=args.with_images)
+                       wechat=args.wechat, with_images=args.with_images,
+                       ignore_calendar=args.ignore_calendar)
+    if result.skipped is not None:
+        print(f"未运行：{result.skipped.reason}")
+        return 0
     print(f"collected {result.collected}; daily {len(result.daily)} "
           f"{json.dumps(result.counts)}; weekly pool +{len(result.weekly)}")
     for note in result.notes:
@@ -340,8 +353,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="download figures published by the source documents")
     p.add_argument("--allow-unverified", action="store_true",
                    help="use registry entries that have not passed verification")
+    p.add_argument("--ignore-calendar", action="store_true",
+                   help="run even on a weekend or a public holiday")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=cmd_daily)
+
+    p = sub.add_parser("workday", help="does the daily run today? exit 0 yes, 1 no")
+    p.add_argument("--date")
+    p.set_defaults(func=cmd_workday)
 
     p = sub.add_parser("render", help="re-render a day's reports from its filled "
                                        "renderings worksheet")

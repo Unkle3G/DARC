@@ -20,6 +20,15 @@ shipped, and you fill it in. No external model, no key.
 
        cd liver-intel && python3 -m liver_intel.cli daily --wechat
 
+   If a scheduled 03:00 run already collected today (out/liver_daily_<date>.json
+   exists and is not empty), do **not** run `daily` again — it would find
+   nothing new and the engine refuses to overwrite. Go straight to step 3 with
+   the worksheet that run left behind, then `render`.
+
+   The run refuses to work on a weekend or a Chinese public holiday and prints
+   the reason; that is the schedule, not a failure. `--ignore-calendar` forces
+   it when the operator asks.
+
    Read the printed notes. `MODEL STEP DID NOT RUN` is expected on this path
    and means grading was rules-only; say so to the operator. The last line
    names the worksheet, `out/liver_daily_<date>_renderings.json`.

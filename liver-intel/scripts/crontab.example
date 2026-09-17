@@ -1,11 +1,17 @@
-# Beijing time. The daily report must be on the desk before 08:00, and the US
-# trading day it covers closes at 05:00 Beijing (04:00 during DST), so 06:30
-# leaves room for a retry.
+# Beijing time. Monday to Friday at 03:00; the script itself skips public
+# holidays (data/holidays_cn.json), so the cron line stays a plain 1-5.
 #
-#   crontab -e   (with TZ=Asia/Shanghai in the crontab, or convert to the host TZ)
+#   crontab -e     (CRON_TZ is honoured by cron on Linux; on macOS use
+#                   launchd, or convert these times to the host's timezone)
 CRON_TZ=Asia/Shanghai
-30 6 * * 1-5 /path/to/liver-intel/scripts/run_daily.sh >> /var/log/liver-intel.log 2>&1
+
+0 3 * * 1-5 /path/to/liver-intel/scripts/run_daily.sh >> /var/log/liver-intel.log 2>&1
 
 # Re-verify the feed registry weekly: wires retire feed URLs without notice, and
 # a dead endpoint must fall out of `verified` rather than fail silently.
 0 5 * * 6 cd /path/to/liver-intel && python3 -m liver_intel.cli verify --recheck >> /var/log/liver-intel-verify.log 2>&1
+
+# The public-holiday table covers whole years and is published each autumn for
+# the year ahead. When a year is missing the run falls back to Monday-Friday
+# and says so in 运行提示 -- refresh data/holidays_cn.json from the State
+# Council notice when that appears.

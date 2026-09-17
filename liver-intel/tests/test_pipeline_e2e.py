@@ -172,3 +172,35 @@ def test_model_step_skips_out_of_scope_documents(wired, monkeypatch):
     monkeypatch.setattr(pipeline.llm, "build_judge", lambda enabled=True: Counting())
     pipeline.run_daily(wired, today="2026-09-14", only=["newswire"])
     assert calls and all("Vendor conference" not in title for title in calls)
+
+
+# --- the working-day gate -------------------------------------------------
+def test_a_holiday_run_collects_nothing_and_says_why(wired, monkeypatch):
+    monkeypatch.setattr(pipeline, "workday_verdict",
+                        lambda day: __import__("liver_intel.workdays", fromlist=["Verdict"])
+                        .Verdict(False, f"{day} 法定节假日，不跑"))
+    result = pipeline.run_daily(wired, today="2026-10-01", only=["newswire"])
+    assert result.skipped is not None and result.collected == 0
+    assert result.report_path is None            # nothing written, nothing overwritten
+
+
+def test_ignore_calendar_runs_anyway(wired, monkeypatch):
+    monkeypatch.setattr(pipeline, "workday_verdict",
+                        lambda day: __import__("liver_intel.workdays", fromlist=["Verdict"])
+                        .Verdict(False, "holiday"))
+    result = pipeline.run_daily(wired, today="2026-09-14", only=["newswire"],
+                                ignore_calendar=True)
+    assert result.skipped is None and result.collected == 3
+
+
+def test_a_second_run_never_replaces_the_day_s_report_with_an_empty_one(wired):
+    """Everything is in seen_items by then, so the second run finds nothing --
+    and writing that out would wipe the morning's article."""
+    first = pipeline.run_daily(wired, today="2026-09-14", only=["newswire"])
+    assert first.daily and first.report_path
+    before = first.report_path.read_text(encoding="utf-8")
+
+    second = pipeline.run_daily(wired, today="2026-09-14", only=["newswire"])
+    assert second.collected == 0 and second.report_path is None
+    assert first.report_path.read_text(encoding="utf-8") == before
+    assert any("未覆盖" in note for note in second.notes)
