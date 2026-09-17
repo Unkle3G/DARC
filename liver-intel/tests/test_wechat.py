@@ -245,3 +245,19 @@ def test_a_quote_that_repeats_the_headline_is_not_shown_twice(domain_map):
     article = wechat_html([item], "2026-09-14", domain_map)
     assert article.count("Inventiva Announces Last Patient Visit in NATiV3") == 1
     assert "<blockquote" in article and "Topline results of NATiV3" in article
+
+
+def test_conference_block_is_a_dated_timeline(domain_map, monkeypatch):
+    from liver_intel import report_wechat
+    from liver_intel.conference import Calendar, Conference
+    calendar = Calendar(conferences=[Conference(
+        id="X", name="Congress X", start="2026-11-05", end="2026-11-09", verified=True,
+        location="Denver", abstract_close="2026-05-28", late_breaker_close="2026-09-25",
+        late_breaker_release="2026-11-05")])
+    block = report_wechat._conference_block("2026-09-17", calendar)
+    assert "摘要投稿截止" in block and "2026-05-28　已过" in block
+    assert "Late-breaker 投稿截止" in block and "2026-09-25" in block
+    assert "Late-breaker 摘要公开（解禁）" in block
+    assert "此前处于禁发期" not in block and "摘要录用通知" not in block
+    assert (block.index("摘要投稿截止") < block.index("Late-breaker 投稿截止")
+            < block.index("Late-breaker 摘要公开（解禁）"))

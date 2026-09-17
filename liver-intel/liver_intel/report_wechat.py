@@ -224,16 +224,27 @@ def _conference_block(report_date: str, calendar: Calendar | None = None) -> str
     out = [_section("会议日历", len(upcoming))]
     for conference, days in upcoming:
         when = "进行中" if days <= 0 else f"距开幕 {days} 天"
+        place = f"　{conference.location}" if conference.location else ""
         out.append(
             f'<p style="margin:0 0 6px;font-size:16px;font-weight:600;color:{INK};">'
             f'{esc(conference.name)}'
             f'<span style="margin-left:8px;font-size:12px;font-weight:400;color:{ACCENT};">'
             f'{esc(when)}</span></p>')
         out.append(f'<p style="{SMALL}">会期 {esc(conference.start)} 至 '
-                   f'{esc(conference.end)}</p>')
-        if conference.late_breaker_release:
-            out.append(f'<p style="{SMALL}">late-breaker 摘要解禁 '
-                       f'{esc(conference.late_breaker_release)}，此前处于禁发期</p>')
+                   f'{esc(conference.end)}{esc(place)}</p>')
+        milestones = conference.milestones()
+        if milestones:
+            # One row per published date, in the order an author meets them;
+            # a date the society has not published is simply absent.
+            rows = "".join(
+                f'<tr>'
+                f'<td style="padding:3px 12px 3px 0;color:{MUTED};white-space:nowrap;'
+                f'vertical-align:top;">{esc(m.label)}</td>'
+                f'<td style="padding:3px 0;color:{INK if m.date >= report_date else MUTED};">'
+                f'{esc(m.date)}{"" if m.date >= report_date else "　已过"}</td>'
+                f'</tr>' for m in milestones)
+            out.append(f'<table style="border-collapse:collapse;font-size:13px;'
+                       f'line-height:1.7;margin:2px 0 16px;">{rows}</table>')
     return "".join(out)
 
 

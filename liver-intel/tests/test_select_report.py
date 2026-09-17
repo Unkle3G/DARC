@@ -129,3 +129,20 @@ def test_a_finished_meeting_drops_out(domain_map):
         Conference(id="A", name="Past Meeting", start="2026-05-05", end="2026-05-09",
                    verified=True)])
     assert conference_lines("2026-09-17", calendar) == []
+
+
+def test_conference_milestones_print_only_what_the_society_published(domain_map):
+    from liver_intel.conference import Calendar, Conference
+    from liver_intel.report import conference_lines
+    calendar = Calendar(conferences=[Conference(
+        id="X", name="Congress X", start="2026-11-05", end="2026-11-09", verified=True,
+        location="Denver", abstract_close="2026-05-28", late_breaker_open="2026-09-15",
+        late_breaker_close="2026-09-25", late_breaker_release="2026-11-05",
+        source_url="https://example.org/x",
+        date_sources={"late_breaker_close": "https://example.org/x/lba"})])
+    text = "\n".join(conference_lines("2026-09-17", calendar))
+    assert "摘要投稿截止：2026-05-28（已过）" in text
+    assert "Late-breaker 投稿截止：2026-09-25（未到）  出处：https://example.org/x/lba" in text
+    assert "Late-breaker 摘要公开（解禁）：2026-11-05" in text
+    assert "未公布：摘要投稿开放、摘要录用通知、摘要公开（解禁）、Late-breaker 录用通知" in text
+    assert "此前处于禁发期" not in text

@@ -126,10 +126,16 @@ def conference_lines(report_date: str, calendar: Calendar | None = None) -> list
     out = ["## 会议日历", ""]
     for conference, days in upcoming:
         when = "进行中" if days <= 0 else f"还有 {days} 天"
-        out.append(f"- **{conference.name}**（{when}）")
+        place = f"，{conference.location}" if conference.location else ""
+        out.append(f"- **{conference.name}**（{when}{place}）")
         out.append(f"  - 会期：{conference.start} 至 {conference.end}")
-        if conference.late_breaker_release:
-            out.append(f"  - late-breaker 摘要解禁：{conference.late_breaker_release}")
+        for milestone in conference.milestones():
+            status = "已过" if milestone.date < report_date else "未到"
+            out.append(f"  - {milestone.label}：{milestone.date}（{status}）"
+                       f"{'  出处：' + milestone.source_url if milestone.source_url else ''}")
+        missing = conference.missing_milestones()
+        if missing:
+            out.append(f"  - 未公布：{'、'.join(missing)}")
         if conference.source_url:
             out.append(f"  - 出处：{conference.source_url}")
     pending = [c.id for c in calendar.unverified]

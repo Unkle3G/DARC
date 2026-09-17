@@ -12,7 +12,7 @@ so an unverified date can never quietly change collection behaviour.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -20,17 +20,66 @@ from typing import Any
 from .config import CONFERENCES
 
 
+#: The dates a congress publishes, in the order an author meets them. Each is
+#: an optional ISO date on :class:`Conference`; the label is what the reports
+#: print. ``*_release`` is the embargo lift -- the moment an abstract's content
+#: becomes public and therefore citable.
+MILESTONES: tuple[tuple[str, str], ...] = (
+    ("abstract_open", "摘要投稿开放"),
+    ("abstract_close", "摘要投稿截止"),
+    ("abstract_notification", "摘要录用通知"),
+    ("abstract_release", "摘要公开（解禁）"),
+    ("late_breaker_open", "Late-breaker 投稿开放"),
+    ("late_breaker_close", "Late-breaker 投稿截止"),
+    ("late_breaker_notification", "Late-breaker 录用通知"),
+    ("late_breaker_release", "Late-breaker 摘要公开（解禁）"),
+)
+
+
+@dataclass
+class Milestone:
+    key: str
+    label: str
+    date: str
+    source_url: str | None = None
+
+
 @dataclass
 class Conference:
     id: str
     name: str
     society: str = ""
+    location: str = ""
     start: str | None = None
     end: str | None = None
+    abstract_open: str | None = None
+    abstract_close: str | None = None
+    abstract_notification: str | None = None
+    abstract_release: str | None = None
+    late_breaker_open: str | None = None
+    late_breaker_close: str | None = None
+    late_breaker_notification: str | None = None
     late_breaker_release: str | None = None
     verified: bool = False
     source_url: str | None = None
+    #: Where each milestone was read, keyed by field name. A date without an
+    #: entry here falls back to ``source_url``.
+    date_sources: dict[str, str] = field(default_factory=dict)
     note: str = ""
+
+    def milestones(self) -> list[Milestone]:
+        """Published milestones only, in author order; nothing is inferred."""
+        out = []
+        for key, label in MILESTONES:
+            value = getattr(self, key)
+            if value:
+                out.append(Milestone(key, label, value,
+                                     self.date_sources.get(key) or self.source_url))
+        return out
+
+    def missing_milestones(self) -> list[str]:
+        """Labels of milestones the society has not published (or nobody read)."""
+        return [label for key, label in MILESTONES if not getattr(self, key)]
 
     @property
     def usable(self) -> bool:
