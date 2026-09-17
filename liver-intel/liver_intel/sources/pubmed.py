@@ -12,7 +12,7 @@ from typing import Any, Iterable
 from urllib.parse import urlencode
 
 from ..models import Item, as_iso_date
-from ..people import authors_from_pubmed_xml
+from ..people import abstracts_from_pubmed_xml, authors_from_pubmed_xml
 from ..textutil import clip
 from .base import BaseSource, Context
 
@@ -79,14 +79,14 @@ class PubmedSource(BaseSource):
         except json.JSONDecodeError:
             return []
 
-        # esummary carries names but no affiliations; the materials library
-        # needs the affiliation, so authorship comes from efetch.
-        authorship = self._authorship(ctx, ids)
+        # esummary carries names but no affiliations and no abstract; one
+        # efetch call supplies both.
+        authorship, abstracts = self._efetch(ctx, ids)
 
         out: list[Item] = []
         for pmid in payload.get("uids", []) or []:
             record = payload.get(pmid) or {}
-            item = self._to_item(ctx, pmid, record)
+            item = self._to_item(ctx, pmid, record, abstracts.get(str(pmid), ""))
             if item is None:
                 continue
             people = authorship.get(str(pmid))
@@ -98,19 +98,24 @@ class PubmedSource(BaseSource):
             out.append(item)
         return self.emit(ctx, out)
 
-    def _authorship(self, ctx: Context, ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    def _efetch(self, ctx: Context, ids: list[str]
+                ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str]]:
+        """Authors-with-affiliations and abstracts, from one call."""
         url = f"{EFETCH}?{urlencode({'db': 'pubmed', 'id': ','.join(ids), 'retmode': 'xml'})}"
         try:
             response = ctx.fetcher.get(url, allow_304=False)
         except Exception as exc:
-            ctx.note(f"[{self.id}] efetch failed, authors not recorded: {exc}")
-            return {}
+            ctx.note(f"[{self.id}] efetch failed, no authors and no abstracts: {exc}")
+            return {}, {}
         if not response.ok:
-            ctx.note(f"[{self.id}] efetch HTTP {response.status}, authors not recorded")
-            return {}
-        return authors_from_pubmed_xml(response.text)
+            ctx.note(f"[{self.id}] efetch HTTP {response.status}, "
+                     f"no authors and no abstracts")
+            return {}, {}
+        return (authors_from_pubmed_xml(response.text),
+                abstracts_from_pubmed_xml(response.text))
 
-    def _to_item(self, ctx: Context, pmid: str, record: dict[str, Any]) -> Item | None:
+    def _to_item(self, ctx: Context, pmid: str, record: dict[str, Any],
+                 abstract: str = "") -> Item | None:
         title = (record.get("title") or "").strip()
         if not title:
             return None
@@ -129,7 +134,14 @@ class PubmedSource(BaseSource):
                 "pub_date": pub_date,
                 "pub_date_is_future": bool(pub_date and pub_date > ctx.today),
                 "authors": [a.get("name") for a in (record.get("authors") or [])][:12],
-                "body": clip(title, 2000),
+                # The abstract is what the journal published about the study, so
+                # it is both what the tagger reads and what may be quoted. Without
+                # it the tagger saw a bare title, fired PUBLICATION alone, and
+                # every article in the literature graded P3.
+                "abstract": clip(abstract, 8000),
+                "has_abstract": bool(abstract),
+                "body": clip("\n".join(filter(None, [title, abstract])), 10_000),
+                "quotable": clip("\n".join(filter(None, [title, abstract])), 10_000),
             },
         )
         item.study.append("PUBLICATION")

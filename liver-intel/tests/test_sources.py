@@ -527,3 +527,39 @@ def test_registry_phases_are_structural_tags():
     assert _phase_tags("PHASE1, PHASE2") == ["PHASE1", "PHASE2"]
     assert _phase_tags("EARLY_PHASE1") == ["PHASE1"]
     assert _phase_tags("NA") == [] and _phase_tags(None) == []
+
+
+# --- literature -----------------------------------------------------------
+def test_literature_item_carries_its_abstract(store, fake_fetcher, domain_map):
+    """A bare title fired PUBLICATION alone and graded P3 forever."""
+    from liver_intel.grade import apply as grade
+    from liver_intel.sources.pubmed import PubmedSource
+    from liver_intel.tagger import Tagger
+
+    ctx = context(store, fake_fetcher, domain_map)
+    item = PubmedSource()._to_item(
+        ctx, "111",
+        {"title": "Resmetirom in MASH: a randomised trial",
+         "fulljournalname": "Journal of hepatology", "sortpubdate": "2026/09/14"},
+        "RESULTS: The Phase 3 trial met the primary endpoint of MASH resolution "
+        "on liver biopsy.")
+    assert item is not None
+    assert item.meta["has_abstract"] is True
+    assert "met the primary endpoint" in item.meta["body"]
+    # the abstract is published by the journal, so it may be quoted as evidence
+    assert "met the primary endpoint" in item.meta["quotable"]
+
+    Tagger(domain_map).apply(item)
+    grade(item, dm=domain_map, today="2026-09-14")
+    assert item.lines == ["L3"]
+    assert {"PHASE3", "ENDPOINT_MET", "BIOPSY_ENDPOINT"} <= set(item.study)
+    assert item.P != "P3", item.why
+
+
+def test_an_article_without_an_abstract_still_collects(store, fake_fetcher, domain_map):
+    from liver_intel.sources.pubmed import PubmedSource
+    ctx = context(store, fake_fetcher, domain_map)
+    item = PubmedSource()._to_item(
+        ctx, "222", {"title": "Editorial on MASH", "fulljournalname": "Hepatology"}, "")
+    assert item is not None and item.meta["has_abstract"] is False
+    assert item.meta["body"] == "Editorial on MASH"

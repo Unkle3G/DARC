@@ -66,6 +66,41 @@ def authors_from_pubmed_xml(xml_text: str) -> dict[str, list[dict[str, Any]]]:
     return out
 
 
+def abstracts_from_pubmed_xml(xml_text: str) -> dict[str, str]:
+    """``{pmid: abstract}`` from the same efetch batch the authors come from.
+
+    The adapter already makes this call for affiliations and was throwing the
+    abstract away, so every literature item reached the tagger as a bare title:
+    one tag, ``PUBLICATION``, no signal, P3 forever. A structured abstract keeps
+    its section labels -- "RESULTS: ..." is exactly what the tagger reads.
+
+    The copyright line is dropped: it is the publisher's boilerplate, not the
+    article, and it would be quotable evidence if it stayed.
+    """
+    out: dict[str, str] = {}
+    try:
+        root = ElementTree.fromstring(xml_text)
+    except ElementTree.ParseError as exc:
+        log.warning("pubmed efetch XML did not parse: %s", exc)
+        return out
+
+    for article in root.iter("PubmedArticle"):
+        pmid_node = article.find("./MedlineCitation/PMID")
+        if pmid_node is None or not (pmid_node.text or "").strip():
+            continue
+        parts: list[str] = []
+        for node in article.iterfind(
+                "./MedlineCitation/Article/Abstract/AbstractText"):
+            text = "".join(node.itertext()).strip()
+            if not text:
+                continue
+            label = (node.get("Label") or "").strip()
+            parts.append(f"{label}: {text}" if label else text)
+        if parts:
+            out[pmid_node.text.strip()] = "\n".join(parts)
+    return out
+
+
 def _author_name(author: ElementTree.Element) -> str:
     collective = author.find("./CollectiveName")
     if collective is not None and collective.text:

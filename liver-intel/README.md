@@ -152,6 +152,28 @@ warning above. Do not publish an article from a rules-only run as if it were
 the full method. Only the items selected for the day are sent for rendering, so
 the cost is bounded by the daily cap.
 
+## Literature (PubMed)
+
+The adapter searches the disease terms over the last three days and archives by
+**collection date** — `sortpubdate` can sit in the future for ahead-of-print
+records (handover section 3). One `efetch` call supplies both the authors with
+affiliations (for the materials library) and the **abstract**, which becomes
+`meta.body` (what the tagger reads) and `meta.quotable` (what may be cited as
+evidence — the journal published it). A structured abstract keeps its section
+labels, so the tagger sees `RESULTS: ...`; the copyright line is dropped.
+
+Two gaps remain, and both need the operator's own policy before they can be
+closed:
+
+* **no journal roster.** The domain map weights `src_kind: journal` at 0.6 and
+  makes no distinction between *Journal of Hepatology* and any other indexed
+  title. A tiered roster belongs in `data/domain_map_liver_v3.md`.
+* **one publication signal.** `PIVOTAL_PUBLICATION` needs Phase 3 in the text;
+  everything else fires `PUBLICATION` alone, which is no signal, so a cohort or
+  diagnostic study in a major journal still grades P3 and reaches only the
+  weekly digest. Splitting it (pivotal result / guideline / meta-analysis /
+  mechanism) is a grading-policy decision, not a code one.
+
 ## Materials library (backend only)
 
 Every collected item's contributors go into the `contributors` table: authors in

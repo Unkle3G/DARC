@@ -97,3 +97,56 @@ def test_contact_name_found_across_a_blank_line():
     people = issuer_contributors({"companies": ["Acme"]},
                                  "Media Contact:\n\nJane Doe\n\njane@example.com")
     assert [p["name"] for p in people] == ["Acme", "Jane Doe"]
+
+
+# --- abstracts ------------------------------------------------------------
+EFETCH_XML = """<?xml version="1.0"?>
+<PubmedArticleSet>
+ <PubmedArticle><MedlineCitation><PMID>111</PMID><Article>
+  <Abstract>
+   <AbstractText Label="BACKGROUND">Resmetirom was studied in MASH.</AbstractText>
+   <AbstractText Label="RESULTS">The trial met the primary endpoint of MASH
+   resolution on liver biopsy.</AbstractText>
+   <CopyrightInformation>Copyright 2026 The Authors.</CopyrightInformation>
+  </Abstract>
+  <AuthorList><Author><LastName>Zhang</LastName><ForeName>Wei</ForeName>
+   <AffiliationInfo><Affiliation>Capital Medical University</Affiliation></AffiliationInfo>
+  </Author></AuthorList>
+ </Article></MedlineCitation></PubmedArticle>
+ <PubmedArticle><MedlineCitation><PMID>222</PMID><Article>
+  <Abstract><AbstractText>One unlabelled paragraph.</AbstractText></Abstract>
+ </Article></MedlineCitation></PubmedArticle>
+ <PubmedArticle><MedlineCitation><PMID>333</PMID><Article>
+ </Article></MedlineCitation></PubmedArticle>
+</PubmedArticleSet>"""
+
+
+def test_abstract_keeps_its_section_labels():
+    """"RESULTS: ..." is exactly what the tagger reads."""
+    from liver_intel.people import abstracts_from_pubmed_xml
+    found = abstracts_from_pubmed_xml(EFETCH_XML)
+    assert found["111"].startswith("BACKGROUND: Resmetirom was studied in MASH.")
+    assert "RESULTS: The trial met the primary endpoint" in found["111"]
+
+
+def test_an_unlabelled_abstract_carries_no_label():
+    from liver_intel.people import abstracts_from_pubmed_xml
+    assert abstracts_from_pubmed_xml(EFETCH_XML)["222"] == "One unlabelled paragraph."
+
+
+def test_the_copyright_line_is_not_part_of_the_abstract():
+    """It is the publisher's boilerplate, and it would be quotable evidence."""
+    from liver_intel.people import abstracts_from_pubmed_xml
+    assert "Copyright" not in abstracts_from_pubmed_xml(EFETCH_XML)["111"]
+
+
+def test_an_article_without_an_abstract_is_simply_absent():
+    from liver_intel.people import abstracts_from_pubmed_xml
+    assert "333" not in abstracts_from_pubmed_xml(EFETCH_XML)
+
+
+def test_one_efetch_call_supplies_both_authors_and_abstracts():
+    from liver_intel.people import abstracts_from_pubmed_xml, authors_from_pubmed_xml
+    assert authors_from_pubmed_xml(EFETCH_XML)["111"][0]["affiliation"] == \
+        "Capital Medical University"
+    assert "111" in abstracts_from_pubmed_xml(EFETCH_XML)
