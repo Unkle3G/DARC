@@ -240,8 +240,17 @@ The daily run writes both `out/liver_daily_<date>.md` and `.json`.
 ## Deployment
 
 `scripts/run_daily.sh` runs the daily collection and adds the weekly digest on
-Fridays; `scripts/crontab.example` has the schedule (03:00 Beijing, Mon–Fri,
+Fridays; `scripts/crontab.example` has the schedule (06:30 Beijing, Mon–Fri,
 plus a weekly re-verification of the registry).
+
+**Why 06:30.** The US regular session closes at 16:00 ET and biotech releases
+land in the hour or two after it, so the run has to clear the close — and the
+offset moves with US daylight saving. 06:30 Beijing is 18:30 ET in summer and
+17:30 ET in winter: after the close in both, and still 90 minutes before the
+08:00 deadline. Earlier times do not survive winter (05:00 Beijing is exactly
+16:00 EST — the close itself). Nothing is lost by running early, only delayed:
+the collection window opens a day before the coverage window, so an after-close
+release missed one morning is picked up the next and labelled 早于本期覆盖窗口.
 
 **Which days it runs.** Monday to Friday, minus Chinese public holidays. That
 is not a weekday test — the State Council moves holidays and designates make-up

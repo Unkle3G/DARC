@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# The daily run: Monday to Friday, minus Chinese public holidays, at 03:00
-# Beijing time (scripts/crontab.example).
+# The daily run: Monday to Friday, minus Chinese public holidays, at 06:30
+# Beijing time -- after the US close in both daylight-saving regimes, and 90
+# minutes before the 08:00 deadline (scripts/crontab.example has the
+# arithmetic).
 #
 # Two things this script does NOT do, and the operator must know why:
 #

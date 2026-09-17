@@ -1,11 +1,26 @@
-# Beijing time. Monday to Friday at 03:00; the script itself skips public
+# Beijing time. Monday to Friday at 06:30; the script itself skips public
 # holidays (data/holidays_cn.json), so the cron line stays a plain 1-5.
+#
+# Why 06:30 and not earlier. The US regular session closes at 16:00 ET, and
+# biotech press releases land in the hour or two after it. The clock offset
+# moves with US daylight saving, so a fixed Beijing time sits at a different
+# distance from the close in summer and winter:
+#
+#     北京      = 美东 (夏令时)  距收盘   = 美东 (冬令时)  距收盘
+#     03:00       15:00           -1.0h     14:00           -2.0h   ← 收盘前
+#     05:00       17:00           +1.0h     16:00            0.0h   ← 冬天正好卡在收盘
+#     06:00       18:00           +2.0h     17:00           +1.0h
+#     06:30       18:30           +2.5h     17:30           +1.5h   ← 全年都在收盘后
+#
+# 06:30 is the earliest Beijing time that clears the close plus its release
+# window in *both* regimes, and it still leaves 90 minutes before the 08:00
+# deadline for the renderings and a retry.
 #
 #   crontab -e     (CRON_TZ is honoured by cron on Linux; on macOS use
 #                   launchd, or convert these times to the host's timezone)
 CRON_TZ=Asia/Shanghai
 
-0 3 * * 1-5 /path/to/liver-intel/scripts/run_daily.sh >> /var/log/liver-intel.log 2>&1
+30 6 * * 1-5 /path/to/liver-intel/scripts/run_daily.sh >> /var/log/liver-intel.log 2>&1
 
 # Re-verify the feed registry weekly: wires retire feed URLs without notice, and
 # a dead endpoint must fall out of `verified` rather than fail silently.
