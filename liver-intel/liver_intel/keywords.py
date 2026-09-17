@@ -78,6 +78,9 @@ def reader_keywords(item: Item, dm: DomainMap, limit: int = 8) -> list[str]:
 
     for company in (item.meta.get("companies") or [])[:2]:
         add(str(company))
+    # A product's maker is searchable whether or not it is on the roster: a
+    # registry record names its lead sponsor even when no roster company matched.
+    add(str(item.meta.get("sponsor") or ""))
     for drug in (item.meta.get("drugs") or [])[:2]:
         add(str(drug))
     for tag in item.study:

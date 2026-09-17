@@ -73,8 +73,9 @@ def _evidence_block(item: Item) -> list[str]:
     if not item.evidence.quotes:
         return ["- 原文依据：未取得可核对的原文片段"]
     out = ["- 原文依据："]
-    for quote in item.evidence.quotes[:4]:
-        locator = f"（{quote.locator}）" if quote.locator else ""
+    for quote in item.evidence.quotes[:6]:
+        locator = (f"（{quote.locator}）" if quote.locator else "").replace(
+            "（supplementary）", "（补充引文，原文逐字）")
         out.append(f"  > {quote.text.strip()}{locator}")
         if quote.translation:
             out.append(f"  > 译：{quote.translation.strip()}")
@@ -97,6 +98,8 @@ def render_item(item: Item, dm: DomainMap, index: int) -> str:
         lines.append(f"- 研究标签：{' / '.join(item.study)}")
     lines.append(f"- 命中信号：{_signals_line(item)}")
     lines.extend(_evidence_block(item))
+    if item.meta.get("sponsor"):
+        lines.append(f"- 申办方（leadSponsor）：{item.meta['sponsor']}")
     if item.meta.get("state_changes"):
         lines.append(f"- 状态变化：{item.meta['state_changes']}")
     if item.meta.get("first_sighting"):

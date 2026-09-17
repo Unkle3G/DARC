@@ -23,16 +23,17 @@ from .config import CONFERENCES
 #: The dates a congress publishes, in the order an author meets them. Each is
 #: an optional ISO date on :class:`Conference`; the label is what the reports
 #: print. ``*_release`` is the embargo lift -- the moment an abstract's content
-#: becomes public and therefore citable.
+#: becomes public and therefore citable -- and keeps the societies' own term
+#: rather than a rendering of it.
 MILESTONES: tuple[tuple[str, str], ...] = (
     ("abstract_open", "摘要投稿开放"),
     ("abstract_close", "摘要投稿截止"),
     ("abstract_notification", "摘要录用通知"),
-    ("abstract_release", "摘要公开（解禁）"),
+    ("abstract_release", "摘要 embargo lift"),
     ("late_breaker_open", "Late-breaker 投稿开放"),
     ("late_breaker_close", "Late-breaker 投稿截止"),
     ("late_breaker_notification", "Late-breaker 录用通知"),
-    ("late_breaker_release", "Late-breaker 摘要公开（解禁）"),
+    ("late_breaker_release", "Late-breaker embargo lift"),
 )
 
 

@@ -143,6 +143,6 @@ def test_conference_milestones_print_only_what_the_society_published(domain_map)
     text = "\n".join(conference_lines("2026-09-17", calendar))
     assert "摘要投稿截止：2026-05-28（已过）" in text
     assert "Late-breaker 投稿截止：2026-09-25（未到）  出处：https://example.org/x/lba" in text
-    assert "Late-breaker 摘要公开（解禁）：2026-11-05" in text
-    assert "未公布：摘要投稿开放、摘要录用通知、摘要公开（解禁）、Late-breaker 录用通知" in text
+    assert "Late-breaker embargo lift：2026-11-05" in text
+    assert "未公布：摘要投稿开放、摘要录用通知、摘要 embargo lift、Late-breaker 录用通知" in text
     assert "此前处于禁发期" not in text

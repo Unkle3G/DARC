@@ -27,8 +27,16 @@ shipped, and you fill it in. No external model, no key.
 3. Fill the worksheet. Open it, and for every entry write the Chinese
    rendering into `zh`. The file's `rules` are binding:
    - literal and complete; nothing added, nothing explained, no glosses;
-   - drug codes, compound names, trial names, company names, targets,
-     registry ids and journal names stay exactly as written;
+   - drug names, codes, compound names, trial names, company names, targets,
+     registry ids and journal names stay exactly as written -- no Chinese
+     INN substitution (cemiplimab stays cemiplimab), and notation stays
+     verbatim (`+/-` stays `+/-`, never `±`);
+   - the original always comes first and the rendering after it; the
+     renderer enforces this, do not work around it;
+   - when a reader needs to know what a product or trial *is*, do not write
+     a note: add an entry to that document's `supplementary` list -- `text`
+     a sentence that exists verbatim in its `source_text`, `zh` its
+     rendering. `render` drops anything not found verbatim;
    - no evaluation, no forecast, no 利好/利空/有望/重磅;
    - unsure → leave `zh` empty; the original then stands alone;
    - never edit `text` or `id`.

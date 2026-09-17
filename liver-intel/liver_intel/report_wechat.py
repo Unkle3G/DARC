@@ -68,18 +68,18 @@ def _section(title: str, count: int | None = None) -> str:
 
 
 def _entry_title(index: int, text: str, rendering: str = "") -> str:
-    """Heading: the Chinese rendering when there is one, the original underneath.
+    """Heading is the original; the Chinese rendering follows it.
 
-    A Chinese title is the heading itself; nothing is added to it.
+    Original first, rendering after -- the same order as every quote. A
+    Chinese title gets nothing added.
     """
-    heading = rendering if (rendering and not is_chinese(text)) else text
     out = (f'<h2 style="margin:26px 0 8px;font-size:18px;line-height:1.55;'
            f'font-weight:700;color:{INK};">'
-           f'<span style="color:{ACCENT};">{index:02d}</span>&nbsp;&nbsp;{esc(heading)}</h2>')
-    if heading is not text:
-        out += (f'<p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:{MUTED};">'
-                f'原题：{esc(text)}'
-                f'<span style="font-size:12px;">　编者译，仅供参考</span></p>')
+           f'<span style="color:{ACCENT};">{index:02d}</span>&nbsp;&nbsp;{esc(text)}</h2>')
+    if rendering and not is_chinese(text):
+        out += (f'<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:{INK};">'
+                f'{esc(rendering)}'
+                f'<span style="font-size:12px;color:{MUTED};">　编者译，仅供参考</span></p>')
     return out
 
 
@@ -150,6 +150,9 @@ def _provenance(item: Item) -> str:
     companies = item.meta.get("companies") or []
     if companies:
         bits.append("、".join(str(c) for c in companies[:2]))
+    elif item.meta.get("sponsor"):
+        # A registry record's issuer is its lead sponsor.
+        bits.append(str(item.meta["sponsor"]))
     bits.append(str(publisher) if publisher else SOURCE_NAMES.get(item.src, item.src))
     bits.append(item.date)
     return " · ".join(b for b in bits if b)
@@ -182,13 +185,17 @@ def render_entry(item: Item, dm: DomainMap, index: int) -> str:
              if q not in fields and _normalise(q.text) != _normalise(item.title)]
     if fields:
         # A registry states its facts in fields. Three one-word pull quotes read
-        # as noise; the same values on one line read as a record.
-        parts.append(
-            f'<p style="{SMALL}">'
-            + "　·　".join(f'{esc(q.locator.split("·")[-1].strip())}：{_field_value(q)}'
-                          for q in fields[:4])
-            + "</p>")
-    for quote in prose[:3]:
+        # as noise; the same values on one line read as a record. The lead
+        # sponsor opens the record: "awaiting agreement with Sponsor" means
+        # nothing until the sponsor is named.
+        cells = []
+        if item.meta.get("sponsor"):
+            cells.append(f'leadSponsor：<span style="color:{INK};">'
+                         f'{esc(item.meta["sponsor"])}</span>')
+        cells += [f'{esc(q.locator.split("·")[-1].strip())}：{_field_value(q)}'
+                  for q in fields[:4]]
+        parts.append(f'<p style="{SMALL}">' + "　·　".join(cells) + "</p>")
+    for quote in prose[:4]:
         parts.append(_quote(quote.text.strip(), quote.translation))
     if not item.evidence.quotes:
         parts.append(f'<p style="{SMALL}">本条未取得可核对的原文片段，详见原文链接。</p>')

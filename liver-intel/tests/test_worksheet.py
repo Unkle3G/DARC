@@ -83,10 +83,31 @@ def test_render_rebuilds_the_reports_from_the_worksheet(tmp_path, monkeypatch, d
     rendered = pipeline.render(settings, "2026-09-14")
     assert "renderings from worksheet: 3 accepted, 0 rejected" in rendered.notes
     article = rendered.wechat_path.read_text(encoding="utf-8")
-    assert "III期试验达到主要终点</h2>" in article
-    assert "原题：Phase 3 trial met the primary endpoint" in article
+    assert "Phase 3 trial met the primary endpoint</h2>" in article
+    assert article.index("primary endpoint</h2>") < article.index("III期试验达到主要终点")
     assert "｜已终止" in article
     assert "达到主要终点" in rendered.report_path.read_text(encoding="utf-8")
     # the JSON carries the renderings too, so a second render is idempotent
     again = pipeline.render(settings, "2026-09-14")
     assert "renderings still missing" not in " ".join(again.notes)
+
+
+def test_supplementary_quote_must_exist_verbatim_in_the_source(tmp_path):
+    item = make()
+    item.meta["body"] = ("The Board announces that TQB6426, a GPC3 antibody-drug conjugate, "
+                         "has received IND approval. GPC3 is highly expressed in HCC.")
+    path = tmp_path / "w.json"
+    worksheet.write([item], path, "2026-09-14")
+    sheet = json.loads(path.read_text(encoding="utf-8"))
+    assert sheet["documents"][0]["source_text"].startswith("The Board announces")
+    sheet["documents"][0]["supplementary"] = [
+        {"text": "GPC3 is highly expressed in HCC.", "zh": "GPC3 在 HCC 中高表达。"},
+        {"text": "GPC3 is a promising target.", "zh": "GPC3 是有前景的靶点。"},   # not in source
+    ]
+    path.write_text(json.dumps(sheet, ensure_ascii=False), encoding="utf-8")
+    accepted, rejected, reasons = worksheet.apply([item], path)
+    assert (accepted, rejected) == (1, 1)
+    added = item.evidence.quotes[-1]
+    assert added.text == "GPC3 is highly expressed in HCC." and added.locator == "supplementary"
+    assert added.translation == "GPC3 在 HCC 中高表达。"
+    assert "not found verbatim" in reasons[0]

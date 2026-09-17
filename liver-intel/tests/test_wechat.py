@@ -104,21 +104,36 @@ def test_provenance_and_link_follow_each_entry(domain_map):
     assert "信源与原文" not in article
 
 
-def test_foreign_title_is_headed_by_its_rendering_with_the_original_kept(domain_map):
+def test_foreign_title_keeps_the_original_first_and_its_rendering_after(domain_map):
+    """Original first, rendering after -- the rule for titles as for quotes."""
     item = make(title="Phase 3 topline results in MASH")
     item.meta["title_zh"] = "MASH III期顶线结果"
     article = wechat_html([item], "2026-09-14", domain_map)
-    assert "MASH III期顶线结果</h2>" in article
-    assert "原题：Phase 3 topline results in MASH" in article
-    assert article.index("MASH III期顶线结果") < article.index("原题：")
+    assert "Phase 3 topline results in MASH</h2>" in article
+    assert "MASH III期顶线结果" in article
+    assert article.index("Phase 3 topline results in MASH</h2>") < article.index("MASH III期顶线结果")
+    assert "编者译，仅供参考" in body_of(article)
 
 
-def test_chinese_title_is_never_replaced(domain_map):
+def test_chinese_title_gets_nothing_added(domain_map):
     item = make(title="某公司III期临床达到主要终点")
     item.meta["title_zh"] = "should not appear"
     article = wechat_html([item], "2026-09-14", domain_map)
     assert "某公司III期临床达到主要终点</h2>" in article
-    assert "should not appear" not in article and "原题" not in article
+    assert "should not appear" not in article
+
+
+def test_registry_record_opens_with_its_sponsor(domain_map):
+    item = make()
+    item.src = "ctgov"
+    item.meta["sponsor"] = "Roswell Park Cancer Institute"
+    item.evidence.quotes = [Quote(text="awaiting agreement with Sponsor",
+                                  locator="ClinicalTrials.gov · whyStopped")]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    record = article[article.index("leadSponsor"):article.index("whyStopped")]
+    assert "Roswell Park Cancer Institute" in record
+    assert "出处：Roswell Park Cancer Institute · ClinicalTrials.gov" in article
+    assert "Roswell Park Cancer Institute</span>" in article      # keyword chip too
 
 
 def test_registry_field_rendering_sits_beside_the_value(domain_map):
@@ -257,7 +272,7 @@ def test_conference_block_is_a_dated_timeline(domain_map, monkeypatch):
     block = report_wechat._conference_block("2026-09-17", calendar)
     assert "摘要投稿截止" in block and "2026-05-28　已过" in block
     assert "Late-breaker 投稿截止" in block and "2026-09-25" in block
-    assert "Late-breaker 摘要公开（解禁）" in block
-    assert "此前处于禁发期" not in block and "摘要录用通知" not in block
+    assert "Late-breaker embargo lift" in block
+    assert "解禁" not in block and "摘要录用通知" not in block
     assert (block.index("摘要投稿截止") < block.index("Late-breaker 投稿截止")
-            < block.index("Late-breaker 摘要公开（解禁）"))
+            < block.index("Late-breaker embargo lift"))
