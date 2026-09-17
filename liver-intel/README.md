@@ -122,7 +122,26 @@ the source) and dropped rather than published when it fails. When no model ran
 there is no rendering, the original stands alone, and the internal report says
 `MODEL STEP DID NOT RUN` at the top of 运行提示.
 
-## Model credentials
+## Renderings without an API key (the default path)
+
+Most machines running the engine have no Anthropic credential and the
+operator has a Claude Code session instead. That session is the translator:
+the daily run writes `out/liver_daily_<date>_renderings.json` — one slot per
+non-Chinese title, quote and field value that shipped, with the rules inside
+the file — the session fills `zh`, and
+
+```bash
+python -m liver_intel.cli render --date <date>
+```
+
+reads it back through the same acceptance checks as the API step (must be
+Chinese, must differ from the source, no evaluative wording; the source text
+must be untouched) and rewrites the md / json / 公众号 html. The repo skill
+`.claude/skills/hepadaily/SKILL.md` gives the session the whole procedure, so
+the workflow moves with the repo to any machine. Nothing is translated that
+nobody filled in.
+
+## Model credentials (optional)
 
 Section 0 makes the model step part of the method: the significance step
 (`llm.py`) and the renderings (`translate.py`) both need an Anthropic credential

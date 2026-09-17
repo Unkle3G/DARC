@@ -24,7 +24,7 @@ import os
 from typing import Any, Protocol
 
 from .llm import EvaluativeLanguage, assert_not_evaluative, credential_status
-from .models import Item, is_chinese
+from .models import Item, _CJK, is_chinese
 
 log = logging.getLogger(__name__)
 
@@ -155,7 +155,11 @@ def _accept(source: str, rendering: str, where: str) -> str:
     """A rendering is kept only when it is Chinese, differs from its source and
     carries no judgement. Anything else is dropped rather than published."""
     rendering = (rendering or "").strip()
-    if not rendering or rendering == source.strip() or not is_chinese(rendering):
+    # "Contains Chinese", not "mostly Chinese": a rendering that keeps a proper
+    # noun as written ("MagIA Diagnostics 清算") is dominated by Latin letters
+    # by design, and the ratio test rejected exactly the renderings that
+    # followed the rules best.
+    if not rendering or rendering == source.strip() or not _CJK.search(rendering):
         return ""
     try:
         assert_not_evaluative(rendering, where)

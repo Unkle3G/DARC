@@ -11,7 +11,7 @@ from datetime import date, timedelta
 
 from . import grade as grading
 from . import images as image_tools
-from . import llm, people as people_tools, report, report_wechat, select, translate
+from . import llm, people as people_tools, report, report_wechat, select, translate, worksheet
 from .conference import Calendar
 from .config import Settings
 from .domain_map import DomainMap, load as load_domain_map
@@ -35,6 +35,7 @@ class RunResult:
     report_path: Path | None = None
     json_path: Path | None = None
     wechat_path: Path | None = None
+    worksheet_path: Path | None = None
 
     @property
     def counts(self) -> dict[str, int]:
@@ -204,6 +205,12 @@ def run_daily(settings: Settings, today: str | None = None, since: str | None = 
             if filled or missing:
                 ctx.note(f"renderings: {filled} produced, {missing} missing"
                          + ("" if filled else " -- originals stand alone"))
+            if missing and write:
+                # No model of its own: hand the slots to the operator's session.
+                result.worksheet_path = settings.out_dir / f"liver_daily_{today}_renderings.json"
+                worksheet.write(selection.daily, result.worksheet_path, today)
+                ctx.note(f"renderings worksheet: fill `zh` in {result.worksheet_path.name}, "
+                         f"then run `liver-intel render --date {today}`")
             for item in selection.weekly:
                 store.push_weekly(item)
             published = {item.key for item in selection.daily}
@@ -233,21 +240,60 @@ def run_daily(settings: Settings, today: str | None = None, since: str | None = 
                 "no figure could be downloaded; the article falls back to remote URLs")
 
         if write:
-            body = report.daily_markdown(
-                result.daily, today, ctx.domain_map,
-                notes=result.notes, weekly_pool_size=len(result.weekly))
-            result.report_path = settings.out_dir / f"liver_daily_{today}.md"
-            result.report_path.write_text(body, encoding="utf-8")
-            result.json_path = settings.out_dir / f"liver_daily_{today}.json"
-            result.json_path.write_text(
-                json.dumps([item.to_json() for item in result.daily],
-                           ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            if wechat:
-                article = report_wechat.wechat_html(
-                    result.daily, today, ctx.domain_map, notes=result.notes,
-                    weekly_pool_size=len(result.weekly))
-                result.wechat_path = settings.out_dir / f"liver_daily_{today}_wechat.html"
-                result.wechat_path.write_text(article, encoding="utf-8")
+            _write_outputs(settings, result, ctx.domain_map, wechat=wechat)
+    return result
+
+
+def _write_outputs(settings: Settings, result: RunResult, dm: DomainMap,
+                   wechat: bool) -> None:
+    today = result.report_date
+    body = report.daily_markdown(result.daily, today, dm, notes=result.notes,
+                                 weekly_pool_size=len(result.weekly))
+    result.report_path = settings.out_dir / f"liver_daily_{today}.md"
+    result.report_path.write_text(body, encoding="utf-8")
+    result.json_path = settings.out_dir / f"liver_daily_{today}.json"
+    result.json_path.write_text(
+        json.dumps([item.to_json() for item in result.daily],
+                   ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # What `render` needs to rebuild the same outputs later.
+    (settings.out_dir / f"liver_daily_{today}_run.json").write_text(
+        json.dumps({"date": today, "notes": result.notes, "weekly": len(result.weekly),
+                    "wechat": wechat}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8")
+    if wechat:
+        article = report_wechat.wechat_html(result.daily, today, dm, notes=result.notes,
+                                            weekly_pool_size=len(result.weekly))
+        result.wechat_path = settings.out_dir / f"liver_daily_{today}_wechat.html"
+        result.wechat_path.write_text(article, encoding="utf-8")
+
+
+def render(settings: Settings, today: str, wechat: bool | None = None) -> RunResult:
+    """Re-render a day's outputs after the renderings worksheet was filled in.
+
+    Nothing is collected again: the items are the day's JSON, the renderings
+    come from the worksheet through the same acceptance checks as the API
+    step, and the reports are rewritten in place.
+    """
+    json_path = settings.out_dir / f"liver_daily_{today}.json"
+    if not json_path.exists():
+        raise FileNotFoundError(f"no daily run for {today}: {json_path}")
+    items = [Item.from_json(raw) for raw in json.loads(json_path.read_text(encoding="utf-8"))]
+    run_path = settings.out_dir / f"liver_daily_{today}_run.json"
+    run_info = json.loads(run_path.read_text(encoding="utf-8")) if run_path.exists() else {}
+    result = RunResult(report_date=today, daily=items,
+                       weekly=[None] * int(run_info.get("weekly") or 0),  # type: ignore[list-item]
+                       notes=[n for n in run_info.get("notes", [])
+                              if not n.startswith("renderings")])
+    sheet = settings.out_dir / f"liver_daily_{today}_renderings.json"
+    if sheet.exists():
+        accepted, rejected, reasons = worksheet.apply(items, sheet)
+        result.notes.append(f"renderings from worksheet: {accepted} accepted, {rejected} rejected")
+        result.notes.extend(reasons)
+    _, missing = translate.translate_items(items, translate.NullTranslator())
+    if missing:
+        result.notes.append(f"renderings still missing: {missing} -- originals stand alone")
+    _write_outputs(settings, result, load_domain_map(),
+                   wechat=bool(run_info.get("wechat")) if wechat is None else wechat)
     return result
 
 

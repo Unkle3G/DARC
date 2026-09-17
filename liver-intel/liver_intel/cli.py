@@ -24,7 +24,7 @@ from .domain_map import load as load_domain_map
 from .feeds import Feed, Registry
 from .http import Fetcher
 from .models import today_iso
-from .pipeline import run_daily, run_weekly
+from .pipeline import render, run_daily, run_weekly
 from .preflight import check as preflight_check, summarise as preflight_summary
 from .store import Store
 from .verify import verify_registry
@@ -118,6 +118,23 @@ def cmd_daily(args: argparse.Namespace) -> int:
         print(f"wrote {result.json_path}")
     if result.wechat_path:
         print(f"wrote {result.wechat_path}  (paste into the WeChat editor)")
+    if result.worksheet_path:
+        print(f"wrote {result.worksheet_path}  (fill `zh`, then: liver-intel render "
+              f"--date {result.report_date})")
+    return 0
+
+
+def cmd_render(args: argparse.Namespace) -> int:
+    """Rebuild a day's reports after the renderings worksheet was filled in."""
+    settings = _settings(args)
+    result = render(settings, args.date, wechat=True if args.wechat else None)
+    for note in result.notes:
+        if note.startswith("renderings"):
+            print(f"  {note}")
+    print(f"wrote {result.report_path}")
+    print(f"wrote {result.json_path}")
+    if result.wechat_path:
+        print(f"wrote {result.wechat_path}")
     return 0
 
 
@@ -320,6 +337,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="use registry entries that have not passed verification")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=cmd_daily)
+
+    p = sub.add_parser("render", help="re-render a day's reports from its filled "
+                                       "renderings worksheet")
+    p.add_argument("--date", required=True)
+    p.add_argument("--wechat", action="store_true")
+    p.set_defaults(func=cmd_render)
 
     p = sub.add_parser("weekly", help="drain the weekly pool into the digest")
     p.add_argument("--date")

@@ -102,3 +102,9 @@ def test_builder_without_credentials_is_null(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
     monkeypatch.setattr("os.path.isdir", lambda p: False)
     assert isinstance(translate.build_translator(), translate.NullTranslator)
+
+
+def test_a_rendering_that_keeps_a_proper_noun_is_still_chinese():
+    from liver_intel.translate import _accept
+    assert _accept("Liquidation of MagIA Diagnostics", "MagIA Diagnostics 清算", "x") == "MagIA Diagnostics 清算"
+    assert _accept("Liquidation of MagIA Diagnostics", "Liquidation of MagIA Diagnostics Ltd", "x") == ""
