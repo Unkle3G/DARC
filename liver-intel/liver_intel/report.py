@@ -117,6 +117,14 @@ def render_item(item: Item, dm: DomainMap, index: int) -> str:
     return "\n".join(lines)
 
 
+def _place(conference) -> str:
+    """", Kumamoto, Japan（日本 熊本）" -- the society's wording, then the Chinese."""
+    if not conference.location:
+        return ""
+    zh = f"（{conference.location_zh}）" if conference.location_zh else ""
+    return f"，{conference.location}{zh}"
+
+
 def conference_lines(report_date: str, calendar: Calendar | None = None) -> list[str]:
     """The conference block: what is coming, and when its abstracts go public.
 
@@ -130,8 +138,7 @@ def conference_lines(report_date: str, calendar: Calendar | None = None) -> list
     out = ["## 会议日历", ""]
     for conference, days in upcoming:
         when = "进行中" if days <= 0 else f"还有 {days} 天"
-        place = f"，{conference.location}" if conference.location else ""
-        out.append(f"- **{conference.name}**（{when}{place}）")
+        out.append(f"- **{conference.name}**（{when}{_place(conference)}）")
         out.append(f"  - 会期：{conference.start} 至 {conference.end}")
         for milestone in conference.milestones():
             status = "已过" if milestone.date < report_date else "未到"
@@ -148,9 +155,8 @@ def conference_lines(report_date: str, calendar: Calendar | None = None) -> list
         out.append("")
         for conference, days in stcs:
             when = "进行中" if days <= 0 else f"还有 {days} 天"
-            place = f"，{conference.location}" if conference.location else ""
             out.append(f"- {conference.name}：{conference.start} 至 {conference.end}"
-                       f"（{when}{place}）  出处：{conference.source_url or '—'}")
+                       f"（{when}{_place(conference)}）  出处：{conference.source_url or '—'}")
     pending = [c.id for c in calendar.unverified]
     if pending:
         out.append(f"- 待核实：{'、'.join(pending)}（日期未确认，不生效）")

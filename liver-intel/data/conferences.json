@@ -28,7 +28,8 @@
         "late_breaker_close": "https://www.aasld.org/tlm-26/late-breaking-abstract-submissions-tlm26",
         "late_breaker_release": "https://www.aasld.org/tlm-26/embargo-policy"
       },
-      "kind": "annual"
+      "kind": "annual",
+      "location_zh": "美国 丹佛"
     },
     {
       "id": "EASL2027",
@@ -49,7 +50,8 @@
       "late_breaker_close": null,
       "late_breaker_notification": null,
       "date_sources": {},
-      "kind": "annual"
+      "kind": "annual",
+      "location_zh": "英国 伦敦"
     },
     {
       "id": "APASL2027",
@@ -72,7 +74,8 @@
       "date_sources": {
         "abstract_close": "https://www.apasl2027.org/abstract-submissions"
       },
-      "kind": "annual"
+      "kind": "annual",
+      "location_zh": "澳大利亚 悉尼"
     },
     {
       "id": "APASL-STC2026-Kumamoto",
@@ -93,7 +96,8 @@
       "verified": true,
       "source_url": "https://www.apasl.info/conferences.php",
       "date_sources": {},
-      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php: \"APASL STC 2026 Kumamoto / September 18-19, 2026\". Meeting site https://www.apasl-stc2026kumamoto.org (not read)."
+      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php: \"APASL STC 2026 Kumamoto / September 18-19, 2026\". Meeting site https://www.apasl-stc2026kumamoto.org (not read).",
+      "location_zh": "日本 熊本"
     },
     {
       "id": "APASL-STC2026-Almaty",
@@ -114,7 +118,8 @@
       "verified": true,
       "source_url": "https://www.apasl.info/conferences.php",
       "date_sources": {},
-      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php (Future Meetings list)."
+      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php (Future Meetings list).",
+      "location_zh": "哈萨克斯坦 阿拉木图"
     },
     {
       "id": "APASL-STC2026-Dhaka",
@@ -135,7 +140,8 @@
       "verified": true,
       "source_url": "https://www.apasl.info/conferences.php",
       "date_sources": {},
-      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php: \"APASL STC 2026 Dhaka / December 5-6, 2026\". Meeting site https://apasl-stc2026dhaka.org/ (not read)."
+      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php: \"APASL STC 2026 Dhaka / December 5-6, 2026\". Meeting site https://apasl-stc2026dhaka.org/ (not read).",
+      "location_zh": "孟加拉国 达卡"
     },
     {
       "id": "APASL-STC2027-Bishkek",
@@ -156,14 +162,15 @@
       "verified": true,
       "source_url": "https://www.apasl.info/conferences.php",
       "date_sources": {},
-      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php (Future Meetings list)."
+      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php (Future Meetings list).",
+      "location_zh": "吉尔吉斯斯坦 比什凯克"
     },
     {
       "id": "APASL-STC2027-Kaohsiung",
       "name": "APASL STC 2027 Kaohsiung",
       "society": "APASL",
       "kind": "stc",
-      "location": "Kaohsiung, Taiwan",
+      "location": "Kaohsiung, Taiwan, China",
       "start": "2027-06-25",
       "end": "2027-06-27",
       "abstract_open": null,
@@ -177,7 +184,8 @@
       "verified": true,
       "source_url": "https://www.apasl.info/conferences.php",
       "date_sources": {},
-      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php (Future Meetings list)."
+      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php (Future Meetings list).",
+      "location_zh": "中国台湾 高雄"
     },
     {
       "id": "APASL-STC2027-Danang",
@@ -198,7 +206,8 @@
       "verified": true,
       "source_url": "https://www.apasl.info/conferences.php",
       "date_sources": {},
-      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php (Future Meetings list)."
+      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php (Future Meetings list).",
+      "location_zh": "越南 岘港"
     },
     {
       "id": "APASL-STC2027-Chongqing",
@@ -219,7 +228,8 @@
       "verified": true,
       "source_url": "https://www.apasl.info/conferences.php",
       "date_sources": {},
-      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php (Future Meetings list)."
+      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php (Future Meetings list).",
+      "location_zh": "中国 重庆"
     },
     {
       "id": "APASL-STC2027-Karachi",
@@ -240,7 +250,8 @@
       "verified": false,
       "source_url": "https://www.apasl.info/conferences.php",
       "date_sources": {},
-      "note": "https://www.apasl.info/conferences.php lists only \"December, 2027\" -- no days, so no dates are filled and the entry stays inert until the society publishes them."
+      "note": "https://www.apasl.info/conferences.php lists only \"December, 2027\" -- no days, so no dates are filled and the entry stays inert until the society publishes them.",
+      "location_zh": "巴基斯坦 卡拉奇"
     },
     {
       "id": "APASL2028",
@@ -261,7 +272,8 @@
       "verified": true,
       "source_url": "https://www.apasl.info/conferences.php",
       "date_sources": {},
-      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php: \"APASL Annual Meeting 2028 Seoul / April 13-16, 2028\". Nothing else published."
+      "note": "Read 2026-09-17 from https://www.apasl.info/conferences.php: \"APASL Annual Meeting 2028 Seoul / April 13-16, 2028\". Nothing else published.",
+      "location_zh": "韩国 首尔"
     }
   ]
 }

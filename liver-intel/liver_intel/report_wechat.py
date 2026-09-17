@@ -233,6 +233,8 @@ def _conference_block(report_date: str, calendar: Calendar | None = None) -> str
     for conference, days in upcoming:
         when = "进行中" if days <= 0 else f"距开幕 {days} 天"
         place = f"　{conference.location}" if conference.location else ""
+        if conference.location_zh:
+            place += f"　{conference.location_zh}"
         out.append(
             f'<p style="margin:0 0 6px;font-size:16px;font-weight:600;color:{INK};">'
             f'{esc(conference.name)}'
@@ -264,7 +266,8 @@ def _conference_block(report_date: str, calendar: Calendar | None = None) -> str
             f'<td style="padding:3px 12px 3px 0;color:{MUTED};white-space:nowrap;'
             f'vertical-align:top;">{esc(c.start)} 至 {esc(c.end)}</td>'
             f'<td style="padding:3px 0;color:{MUTED};vertical-align:top;">'
-            f'{esc(c.location)}</td>'
+            f'{esc(c.location)}'
+            f'{"　" + esc(c.location_zh) if c.location_zh else ""}</td>'
             f'</tr>' for c, _ in stcs)
         out.append(f'<table style="border-collapse:collapse;font-size:13px;'
                    f'line-height:1.7;margin:0 0 16px;">{rows}</table>')

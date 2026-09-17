@@ -55,6 +55,9 @@ class Conference:
     #: few weeks would otherwise keep the window open most of the year.
     kind: str = "annual"
     location: str = ""
+    #: Country then city, in mainland-Chinese usage ("日本 熊本"); hand-filled,
+    #: shown after the society's own wording of the place.
+    location_zh: str = ""
     start: str | None = None
     end: str | None = None
     abstract_open: str | None = None
