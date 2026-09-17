@@ -275,3 +275,34 @@ def test_an_approved_indication_is_not_a_cleared_trial(tagger):
     assert "TRIAL_CLEARANCE" not in tagger.tag_study(
         "This indication is approved under accelerated approval based on "
         "improvement of MASH.")
+
+
+def test_registry_scaffolding_is_not_read_as_statements(domain_map):
+    """A registry record states its facts structurally; the adapter's own
+    "Phase: PHASE3" line must not also fire a trial-progress signal."""
+    from liver_intel.grade import rule_signals
+    from liver_intel.models import Item
+    item = Item(src="ctgov", title="t", url="https://clinicaltrials.gov/study/NCT1",
+                date="2026-09-14", study=["PHASE3", "TERMINATED"],
+                meta={"src_kind": "registry", "why_stopped": "Business Reasons",
+                      "structural_study": ["PHASE3", "TERMINATED"],
+                      "sentence_tags": [{"text": "Phase: PHASE3", "tags": ["PHASE3"],
+                                         "future": False}]})
+    assert rule_signals(item) == ["PH3_STOPPED"]
+
+
+def test_a_stopped_early_phase_trial_is_a_stop_not_a_result(domain_map):
+    from liver_intel.grade import rule_signals
+    from liver_intel.models import Item
+    item = Item(src="ctgov", title="t", url="https://clinicaltrials.gov/study/NCT1",
+                date="2026-09-14", study=["PHASE1", "SUSPENDED"],
+                meta={"src_kind": "registry", "why_stopped": "awaiting agreement with Sponsor",
+                      "structural_study": ["PHASE1", "SUSPENDED"]})
+    assert rule_signals(item) == ["TRIAL_STOPPED"]
+
+
+def test_prose_fragments_are_not_drug_codes():
+    from liver_intel.tagger import Tagger
+    found = Tagger._drugs("SEEN ON 09 September with MK-3475 and TQB6426 and EN 09 and AB 12345")
+    assert "EN 09" not in found and "ON 09" not in found
+    assert {"MK-3475", "TQB6426", "AB 12345"} <= set(found)

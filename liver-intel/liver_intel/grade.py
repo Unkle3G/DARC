@@ -42,6 +42,8 @@ SIGNALS: dict[str, dict[str, object]] = {
     # --- background (P2) ---
     "EARLY_RESULT":      {"weight": "background", "desc": "Phase 1 / preclinical / translational result"},
     "TRIAL_PROGRESS":    {"weight": "background", "desc": "Enrolment, protocol or registry progress"},
+    "TRIAL_STOPPED":     {"weight": "background",
+                          "desc": "Trial other than Phase 3 terminated, suspended or withdrawn with a stated reason"},
     "REG_LIST_CHANGE":   {"weight": "background", "desc": "Regulator list page changed (acceptance, review queue)"},
     "REG_TRIAL_CLEARANCE": {"weight": "background",
                             "desc": "Clinical trial application (IND/CTA) cleared -- permission to start a trial, not a marketing approval"},
@@ -95,16 +97,20 @@ def rule_signals(item: Item) -> list[str]:
     in ``meta.structural_study``, and that group is read the same way.
     """
     sentences = item.meta.get("sentence_tags")
-    groups: list[set[str]] = []
-    for entry in sentences or []:
-        if entry.get("future"):
-            continue
-        tags = set(entry.get("tags") or [])
-        if tags:
-            groups.append(tags)
     structural = set(item.meta.get("structural_study") or [])
+    groups: list[set[str]] = []
     if structural:
+        # A registry record states everything in fields; its "sentences" are
+        # scaffolding the adapter wrote ("Phase: PHASE3"), and reading those as
+        # statements made every terminated trial also report "trial progress".
         groups.append(structural)
+    else:
+        for entry in sentences or []:
+            if entry.get("future"):
+                continue
+            tags = set(entry.get("tags") or [])
+            if tags:
+                groups.append(tags)
     if not groups and sentences is None and not structural:
         # No per-statement breakdown was produced at all: fall back to the
         # document's tags. Note the condition -- once a breakdown exists, an
@@ -131,6 +137,10 @@ def _signals_for(study: set[str], item: Item) -> list[str]:
     stopped = study & {"TERMINATED", "SUSPENDED", "WITHDRAWN"}
     if phase3 and stopped and item.meta.get("why_stopped"):
         out.append("PH3_STOPPED")
+    elif stopped and item.meta.get("why_stopped"):
+        # A stopped Phase 1/2 trial used to fall through to EARLY_RESULT and be
+        # described as a "result"; it is a stop, and background-weight.
+        out.append("TRIAL_STOPPED")
     if phase3 and readout:
         out.append("PH3_RESULT")
     elif phase2 and readout:

@@ -15,6 +15,7 @@ P0 by the grading rules; this adapter's job is to hand the grader the fields.
 from __future__ import annotations
 
 import logging
+from datetime import date, timedelta
 from typing import Any, Iterable
 
 from ..models import Item, Quote, as_iso_date
@@ -26,6 +27,10 @@ log = logging.getLogger(__name__)
 FEED_ID = "ctgov.v2"
 STOPPED = {"TERMINATED", "SUSPENDED", "WITHDRAWN"}
 PAGE_SIZE = 100
+#: How far back a sweep reaches when the run sets no window. Without a bound the
+#: API answers in relevance order, and a daily run examined an arbitrary slice
+#: of the registry -- old terminated trials surfaced as if they had just stopped.
+DEFAULT_LOOKBACK_DAYS = 7
 
 #: Registry query terms.  Conditions only -- line tagging happens later.
 CONDITION_TERMS = (
@@ -59,13 +64,16 @@ class CtGovSource(BaseSource):
 
         items: list[Item] = []
         seen_nct: set[str] = set()
+        window_start = ctx.since or (
+            date.fromisoformat(ctx.today) - timedelta(days=DEFAULT_LOOKBACK_DAYS)
+        ).isoformat()
         for term in self.terms:
-            for study in self._studies(ctx, feed.url, term):
+            for study in self._studies(ctx, feed.url, term, window_start):
                 nct = study.get("nct_id")
                 if not nct or nct in seen_nct:
                     continue
                 seen_nct.add(nct)
-                item = self._diff_to_item(ctx, study)
+                item = self._diff_to_item(ctx, study, window_start)
                 if item is not None:
                     items.append(item)
         ctx.note(f"[{self.id}] examined {len(seen_nct)} studies, "
@@ -73,7 +81,8 @@ class CtGovSource(BaseSource):
         return self.emit(ctx, items)
 
     # -- API --------------------------------------------------------------
-    def _studies(self, ctx: Context, base_url: str, term: str) -> list[dict[str, Any]]:
+    def _studies(self, ctx: Context, base_url: str, term: str,
+                 window_start: str) -> list[dict[str, Any]]:
         from urllib.parse import urlencode
 
         out: list[dict[str, Any]] = []
@@ -84,10 +93,11 @@ class CtGovSource(BaseSource):
                 "pageSize": str(PAGE_SIZE),
                 "fields": "|".join(FIELDS),
                 "format": "json",
+                # Always bounded and newest-first: the state table decides what
+                # is emitted, but only among studies touched in the window.
+                "filter.advanced": f"AREA[LastUpdatePostDate]RANGE[{window_start},MAX]",
+                "sort": "LastUpdatePostDate:desc",
             }
-            if ctx.since:
-                # Narrow the sweep; the state table still decides what is emitted.
-                params["filter.advanced"] = f"AREA[LastUpdatePostDate]RANGE[{ctx.since},MAX]"
             if token:
                 params["pageToken"] = token
             url = f"{base_url}?{urlencode(params)}"
@@ -108,7 +118,8 @@ class CtGovSource(BaseSource):
         return out
 
     # -- state diffing ----------------------------------------------------
-    def _diff_to_item(self, ctx: Context, study: dict[str, Any]) -> Item | None:
+    def _diff_to_item(self, ctx: Context, study: dict[str, Any],
+                      window_start: str | None = None) -> Item | None:
         nct = study["nct_id"]
         current = NctState(
             nct_id=nct,
@@ -121,9 +132,12 @@ class CtGovSource(BaseSource):
         previous = ctx.store.get_nct(nct)
         ctx.store.put_nct(current)
 
-        if previous is None:
+        first_sighting = previous is None
+        if first_sighting:
             # First sighting: only report if it is already newsworthy, otherwise
-            # the first run after deployment would emit the whole registry.
+            # the first run after deployment would emit the whole registry. The
+            # registry does not say *when* the status changed, so the report
+            # labels these rather than claiming a change happened today.
             if not (current.overall_status in STOPPED and current.why_stopped):
                 return None
             changes = {"overall_status": (None, current.overall_status)}
@@ -133,10 +147,14 @@ class CtGovSource(BaseSource):
                 return None
 
         url = f"https://clinicaltrials.gov/study/{nct}"
-        change_text = "; ".join(
-            f"{field}: {before or 'none'} -> {after or 'none'}"
-            for field, (before, after) in changes.items()
-        )
+        if first_sighting:
+            change_text = (f"first sighting: overall_status {current.overall_status} "
+                           f"(last update posted {current.last_update_posted})")
+        else:
+            change_text = "; ".join(
+                f"{field}: {before or 'none'} -> {after or 'none'}"
+                for field, (before, after) in changes.items()
+            )
         item = Item(
             src=self.id,
             title=study.get("title") or nct,
@@ -153,6 +171,7 @@ class CtGovSource(BaseSource):
                 "last_update_posted": current.last_update_posted,
                 "results_first_posted": current.results_first_posted,
                 "state_changes": change_text,
+                "first_sighting": first_sighting,
                 # ``body`` feeds the tagger and carries engine-written scaffolding
                 # ("Phase: PHASE3"). ``quotable`` is only what the registry itself
                 # published, so evidence quotes cannot end up citing our own
@@ -184,19 +203,20 @@ class CtGovSource(BaseSource):
                           locator=f"ClinicalTrials.gov · {label}"))
 
         # Give the grader the phase and stop tags directly; the text tagger sees
-        # the same facts but the registry states them structurally.
-        if _is_phase3(current.phase):
-            item.study.append("PHASE3")
+        # the same facts but the registry states them structurally, and the
+        # grader reads a registry record from its structural tags alone.
+        item.study.extend(_phase_tags(current.phase))
         if (current.overall_status or "") in STOPPED:
             item.study.append(current.overall_status)
         # Results already on file when we first see a study are not a readout:
         # only a posting that actually happened in this window is news.
+        window_start = window_start or ctx.since
         results_are_new = (
             previous is not None
             and previous.results_first_posted != current.results_first_posted
         ) or (
-            previous is None and ctx.since is not None
-            and (current.results_first_posted or "") >= ctx.since
+            previous is None and window_start is not None
+            and (current.results_first_posted or "") >= window_start
         )
         if current.results_first_posted and results_are_new:
             item.study.append("TOPLINE")
@@ -206,6 +226,16 @@ class CtGovSource(BaseSource):
 
 def _is_phase3(phase: str | None) -> bool:
     return "3" in (phase or "") or "III" in (phase or "")
+
+
+def _phase_tags(phase: str | None) -> list[str]:
+    """Registry phase values ("PHASE1, PHASE2", "EARLY_PHASE1", "NA") as tags."""
+    text = (phase or "").upper()
+    out = []
+    for number in ("1", "2", "3", "4"):
+        if f"PHASE{number}" in text or f"PHASE {number}" in text:
+            out.append(f"PHASE{number}")
+    return out
 
 
 def _flatten(study: dict[str, Any]) -> dict[str, Any]:

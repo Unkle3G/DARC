@@ -129,7 +129,12 @@ WITHDRAWAL_CONTEXT = re.compile(
 
 #: Phrases that show up in drug naming; used to lift a compound name out of a
 #: headline when the release does not carry structured metadata.
-_DRUG_CODE = re.compile(r"\b([A-Z]{2,5}[- ]?\d{2,5}[A-Za-z]?)\b")
+#: A space-separated code needs three digits ("MK 3475"); two letters and two
+#: digits with a space between them is a fragment of prose ("EN 09" came out of
+#: a filing and went into the reader's keyword row as a compound).
+_DRUG_CODE = re.compile(r"\b([A-Z]{2,5}(?:-?\d{2,5}|\s\d{3,5})[A-Za-z]?)\b")
+_NOT_A_CODE = {"EN", "ON", "IN", "AT", "NO", "OF", "TO", "BY", "OR", "AN", "AS", "IS",
+               "US", "UK", "EU", "ET", "AM", "PM", "MG", "ML", "KG", "CI", "HR", "OR"}
 _INN_SUFFIX = re.compile(
     r"\b([a-z][a-z\-]{4,}(?:tide|mab|nib|stat|siran|vir|prazole|fexor|glitazar|"
     r"delpar|branor|rasib|ciclib|zumab|ximab|umab))\b", re.I)
@@ -315,6 +320,8 @@ class Tagger:
         for match in _DRUG_CODE.finditer(text):
             token = match.group(1)
             if token.upper().startswith(("NCT", "EX-", "ISO", "COVID")):
+                continue
+            if re.match(r"[A-Z]+", token).group(0) in _NOT_A_CODE:
                 continue
             found.append(token)
         for match in _INN_SUFFIX.finditer(text):

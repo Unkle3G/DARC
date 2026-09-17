@@ -11,7 +11,8 @@ from liver_intel.sources.xalert import XAlertSource
 
 
 def context(store, fetcher, domain_map, entries=(), **kwargs):
-    return Context(settings=Settings(allow_unverified=False), fetcher=fetcher,
+    return Context(settings=Settings(allow_unverified=False, contact="ops@example.com"),
+                   fetcher=fetcher,
                    store=store, registry=Registry(entries=list(entries)),
                    domain_map=domain_map, today="2026-09-14", **kwargs)
 
@@ -165,6 +166,33 @@ def test_already_terminated_trial_is_reported_on_first_sighting(store, fake_fetc
     item = CtGovSource()._diff_to_item(
         ctx, study(status="TERMINATED", why="enrolment futility"))
     assert item is not None
+    # The registry does not say when it stopped, and the record must not
+    # pretend a change happened today.
+    assert item.meta["first_sighting"] is True
+    assert item.meta["state_changes"].startswith("first sighting:")
+    assert "none ->" not in item.meta["state_changes"]
+
+
+def test_registry_sweep_is_bounded_and_newest_first(store, fake_fetcher, domain_map):
+    """Unbounded, the API answers in relevance order and a daily run examined an
+    arbitrary slice of the registry, surfacing old terminated trials as news."""
+    from liver_intel.feeds import Feed
+    feed = Feed(id="ctgov.v2", url="https://clinicaltrials.gov/api/v2/studies",
+                source="ctgov", task="T3", status="verified", kind="api")
+    fake_fetcher.add("https://clinicaltrials.gov/api/v2/studies", '{"studies": []}')
+    ctx = context(store, fake_fetcher, domain_map, [feed])          # no since
+    CtGovSource(terms=("MASH",)).collect(ctx)
+    url = fake_fetcher.calls[-1]
+    assert "filter.advanced=AREA%5BLastUpdatePostDate%5DRANGE%5B2026-09-07%2CMAX%5D" in url
+    assert "sort=LastUpdatePostDate%3Adesc" in url
+
+
+def test_edgar_refuses_to_run_without_a_contact_address(store, fake_fetcher, domain_map):
+    ctx = Context(settings=Settings(contact=""), fetcher=fake_fetcher, store=store,
+                  registry=Registry(entries=[]), domain_map=domain_map, today="2026-09-14")
+    assert EdgarSource().collect(ctx) == []
+    assert any("LIVER_INTEL_CONTACT" in note for note in ctx.notes)
+    assert fake_fetcher.calls == []
 
 
 # --- T4 -------------------------------------------------------------------
@@ -492,3 +520,10 @@ def test_sponsor_token_skips_words_identifying_no_one():
     from liver_intel.sources.regulator import sponsor_token
 
     assert sponsor_token("The New Company") == "COMPANY"
+
+
+def test_registry_phases_are_structural_tags():
+    from liver_intel.sources.ctgov import _phase_tags
+    assert _phase_tags("PHASE1, PHASE2") == ["PHASE1", "PHASE2"]
+    assert _phase_tags("EARLY_PHASE1") == ["PHASE1"]
+    assert _phase_tags("NA") == [] and _phase_tags(None) == []

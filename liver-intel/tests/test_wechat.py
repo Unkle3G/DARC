@@ -40,8 +40,8 @@ def test_tiny_and_furniture_images_are_dropped():
 
 
 def body_of(article: str) -> str:
-    """Everything above the reference list -- the part a reader scrolls."""
-    return article.split("信源与原文")[0]
+    """Everything above the sourcing note -- the part a reader scrolls."""
+    return article.split("信源说明")[0]
 
 
 # --- article rendering ----------------------------------------------------
@@ -82,26 +82,52 @@ def test_keywords_replace_engine_labels(domain_map):
     assert "线路" not in article and "命中信号" not in article
 
 
-def test_sourcing_note_and_links_sit_at_the_end(domain_map):
+def test_sourcing_note_sits_at_the_end(domain_map):
     item = make()
     article = wechat_html([item], "2026-09-14", domain_map)
     assert article.index(item.title) < article.index("不采用媒体转述")
-    assert article.index(item.title) < article.index("信源与原文")
+    assert article.index(item.title) < article.index("信源说明")
 
 
-def test_original_link_is_clickable(domain_map):
-    item = make()
-    article = wechat_html([item], "2026-09-14", domain_map)
-    assert f'<a href="{item.url}"' in article
-
-
-def test_every_entry_appears_in_the_reference_list(domain_map):
-    items = [make("P0", title="a"), make("P1", title="b")]
+def test_provenance_and_link_follow_each_entry(domain_map):
+    """Provenance is not collected into a list at the end: each entry carries
+    its own publisher, date and clickable original, before the next entry."""
+    items = [make("P0", title="first entry"), make("P1", title="second entry")]
     for index, item in enumerate(items):
         item.url = f"https://www.example.com/{index}"
+        item.meta["wire"] = "GlobeNewswire"
     article = wechat_html(items, "2026-09-14", domain_map)
-    for item in items:
-        assert f'<a href="{item.url}"' in article
+    first_link = article.index(f'<a href="{items[0].url}"')
+    assert article.index("first entry") < first_link < article.index("second entry")
+    assert article.count("出处：GlobeNewswire · 2026-09-14") == 2
+    assert "查看原文" in article
+    assert "信源与原文" not in article
+
+
+def test_foreign_title_is_headed_by_its_rendering_with_the_original_kept(domain_map):
+    item = make(title="Phase 3 topline results in MASH")
+    item.meta["title_zh"] = "MASH III期顶线结果"
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "MASH III期顶线结果</h2>" in article
+    assert "原题：Phase 3 topline results in MASH" in article
+    assert article.index("MASH III期顶线结果") < article.index("原题：")
+
+
+def test_chinese_title_is_never_replaced(domain_map):
+    item = make(title="某公司III期临床达到主要终点")
+    item.meta["title_zh"] = "should not appear"
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "某公司III期临床达到主要终点</h2>" in article
+    assert "should not appear" not in article and "原题" not in article
+
+
+def test_registry_field_rendering_sits_beside_the_value(domain_map):
+    item = make()
+    item.evidence.quotes = [
+        Quote(text="Business Reasons", locator="ClinicalTrials.gov · whyStopped",
+              translation="商业原因")]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "Business Reasons" in article and "｜商业原因" in article
 
 
 # --- quotes and translation ----------------------------------------------
@@ -209,3 +235,13 @@ def test_registry_fields_render_as_a_record_not_pull_quotes(domain_map):
     article = wechat_html([item], "2026-09-14", domain_map)
     assert "overallStatus：" in article and "TERMINATED" in article
     assert "<blockquote" not in article
+
+
+def test_a_quote_that_repeats_the_headline_is_not_shown_twice(domain_map):
+    item = make(title="Inventiva Announces Last Patient Visit in NATiV3")
+    item.evidence.quotes = [
+        Quote(text="Inventiva Announces Last Patient Visit in NATiV3", locator="tag:PHASE3"),
+        Quote(text="Topline results of NATiV3 expected in Q4 2026", locator="tag:TOPLINE")]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert article.count("Inventiva Announces Last Patient Visit in NATiV3") == 1
+    assert "<blockquote" in article and "Topline results of NATiV3" in article

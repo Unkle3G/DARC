@@ -7,9 +7,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from datetime import date, timedelta
+
 from . import grade as grading
 from . import images as image_tools
-from . import llm, people as people_tools, report, report_wechat, select
+from . import llm, people as people_tools, report, report_wechat, select, translate
 from .conference import Calendar
 from .config import Settings
 from .domain_map import DomainMap, load as load_domain_map
@@ -141,23 +143,63 @@ def fetch_images(items: Iterable[Item], ctx: Context, out_dir: Path) -> int:
     return saved
 
 
+def default_since(report_date: str) -> str:
+    """Where a daily run's collection window opens.
+
+    One day before the report's coverage window: a release published late in
+    the US day carries the previous calendar date and lands after that
+    morning's run. The seen-items table makes the overlap harmless, and an item
+    dated before the coverage window is labelled in the report as a late
+    pickup. Without a bound the first run swept whatever each source held --
+    weeks of releases and three months of exchange filings -- under a header
+    claiming to cover two days.
+    """
+    start, _ = report.coverage_window(report_date)
+    return (date.fromisoformat(start) - timedelta(days=1)).isoformat()
+
+
+def _collapse(notes: list[str]) -> list[str]:
+    """Repeat a note once with a count; 66 identical lines are one fact."""
+    counts: dict[str, int] = {}
+    for note in notes:
+        counts[note] = counts.get(note, 0) + 1
+    return [note if n == 1 else f"{note} × {n}" for note, n in counts.items()]
+
+
 def run_daily(settings: Settings, today: str | None = None, since: str | None = None,
               only: list[str] | None = None, use_llm: bool = True,
               write: bool = True, wechat: bool = False,
               with_images: bool = False) -> RunResult:
     settings.ensure_dirs()
     today = today or today_iso(settings.report_tz)
+    since = since or default_since(today)
     result = RunResult(report_date=today)
+    window_start, _ = report.coverage_window(today)
 
     with Store(settings.db_path) as store:
         ctx = build_context(settings, store, today, since=since)
+        ctx.note(f"collection window opens {since}; report covers {window_start} to {today}")
         with store.run("daily") as stats:
             items = collect(ctx, only=only)
             result.collected = len(items)
             judge = llm.build_judge(enabled=use_llm)
+            if isinstance(judge, llm.NullJudge):
+                # Section 0 makes the model step part of the method; a run
+                # without it is a different, weaker run and must say so.
+                ctx.note("MODEL STEP DID NOT RUN: "
+                         f"{llm.credential_status() or 'disabled by --no-llm'}. "
+                         "Grading is rules-only and nothing is translated.")
             items = enrich(items, ctx, judge)
 
             selection = select.select_daily(items, cap=settings.daily_cap)
+            for item in selection.daily:
+                if item.date < window_start:
+                    item.meta["published_before_window"] = True
+            translator = translate.build_translator(enabled=use_llm)
+            filled, missing = translate.translate_items(selection.daily, translator)
+            if filled or missing:
+                ctx.note(f"renderings: {filled} produced, {missing} missing"
+                         + ("" if filled else " -- originals stand alone"))
             for item in selection.weekly:
                 store.push_weekly(item)
             published = {item.key for item in selection.daily}
@@ -173,8 +215,8 @@ def run_daily(settings: Settings, today: str | None = None, since: str | None = 
 
             result.daily = selection.daily
             result.weekly = selection.weekly
-            result.notes = list(ctx.notes) + [
-                reason for _, reason in selection.dropped]
+            result.notes = _collapse(
+                list(ctx.notes) + [reason for _, reason in selection.dropped])
             stats.update({"collected": result.collected,
                           "daily": len(result.daily),
                           "weekly": len(result.weekly)})

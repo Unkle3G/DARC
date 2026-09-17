@@ -239,17 +239,31 @@ def _response_text(response: Any) -> str:
     return "".join(chunks).strip()
 
 
-def build_judge(enabled: bool = True) -> Judge:
-    """Pick the judge: Claude when a key is configured, rules-only otherwise."""
-    if not enabled:
-        return NullJudge()
-    if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
-        log.info("no Anthropic credential found; significance step runs on rules only")
-        return NullJudge()
+def credential_status() -> str | None:
+    """Why no model can run, or ``None`` when one can.
+
+    The SDK also reads a profile written by ``ant auth login``; an unset
+    ``ANTHROPIC_API_KEY`` alone does not mean there is no credential.
+    """
     try:
         import anthropic  # noqa: F401
     except ImportError:
-        log.info("anthropic SDK not installed; significance step runs on rules only")
+        return "anthropic SDK not installed (pip install anthropic)"
+    if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+        return None
+    profile_dir = os.path.expanduser("~/.config/anthropic")
+    if os.path.isdir(profile_dir) and os.listdir(profile_dir):
+        return None
+    return "no Anthropic credential (set ANTHROPIC_API_KEY, or run `ant auth login`)"
+
+
+def build_judge(enabled: bool = True) -> Judge:
+    """Pick the judge: Claude when a credential is configured, rules-only otherwise."""
+    if not enabled:
+        return NullJudge()
+    reason = credential_status()
+    if reason is not None:
+        log.info("%s; significance step runs on rules only", reason)
         return NullJudge()
     return ClaudeJudge()
 

@@ -5,12 +5,13 @@ Reader-facing rules, distinct from the internal report:
 * Triage grades (P0/P1/P2), line ids, adapter ids and signal names are
   **internal only**. Sections carry reading names (``config.SECTION_NAMES``) and
   each entry shows a row of searchable keywords instead of engine labels.
-* Quotes stay in the source language. A non-Chinese quote is followed by its
-  Chinese rendering, marked 编者译，仅供参考. A Chinese quote is shown as-is and is
-  never translated. When no translation exists the original stands alone -- the
-  engine does not invent one.
-* Sourcing notes, provenance and the clickable original links all sit at the
-  end, as one reference list keyed to the entry numbers.
+* Titles and quotes stay in the source language. A non-Chinese title is headed
+  by its Chinese rendering with the original underneath; a non-Chinese quote is
+  followed by its rendering. Both are marked 编者译，仅供参考. A Chinese source is
+  shown as-is and never translated. When no rendering exists the original
+  stands alone -- the engine does not invent one.
+* Every entry ends with its own provenance line -- publisher, date and the
+  clickable original link. The general sourcing note sits at the end.
 
 The editor strips external stylesheets, so every rule here is inline. The
 no-commentary rule from section 0 still holds: the prose adds counts, scope and
@@ -42,11 +43,17 @@ P = "margin:0 0 18px;font-size:16px;line-height:1.8;color:%s;" % INK
 SMALL = "margin:0 0 10px;font-size:13px;line-height:1.7;color:%s;" % MUTED
 
 
+def _normalise(text: str) -> str:
+    return " ".join((text or "").split()).strip().lower()
+
+
 def esc(text: str) -> str:
     return html_lib.escape(str(text or ""), quote=False)
 
 
-def _section(title: str, count: int) -> str:
+def _section(title: str, count: int | None = None) -> str:
+    counter = ("" if count is None else
+               f'<span style="margin-left:9px;font-size:13px;color:{MUTED};">{count} 条</span>')
     return (
         f'<section style="margin:38px 0 18px;">'
         f'<div style="display:flex;align-items:center;">'
@@ -54,16 +61,26 @@ def _section(title: str, count: int) -> str:
         f'margin-right:9px;"></span>'
         f'<span style="font-size:19px;font-weight:700;color:{INK};'
         f'letter-spacing:.04em;">{esc(title)}</span>'
-        f'<span style="margin-left:9px;font-size:13px;color:{MUTED};">{count} 条</span>'
+        f'{counter}'
         f'</div>'
         f'<div style="height:1px;background:{RULE};margin-top:11px;"></div>'
         f'</section>')
 
 
-def _entry_title(index: int, text: str) -> str:
-    return (f'<h2 style="margin:26px 0 12px;font-size:18px;line-height:1.55;'
-            f'font-weight:700;color:{INK};">'
-            f'<span style="color:{ACCENT};">{index:02d}</span>&nbsp;&nbsp;{esc(text)}</h2>')
+def _entry_title(index: int, text: str, rendering: str = "") -> str:
+    """Heading: the Chinese rendering when there is one, the original underneath.
+
+    A Chinese title is the heading itself; nothing is added to it.
+    """
+    heading = rendering if (rendering and not is_chinese(text)) else text
+    out = (f'<h2 style="margin:26px 0 8px;font-size:18px;line-height:1.55;'
+           f'font-weight:700;color:{INK};">'
+           f'<span style="color:{ACCENT};">{index:02d}</span>&nbsp;&nbsp;{esc(heading)}</h2>')
+    if heading is not text:
+        out += (f'<p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:{MUTED};">'
+                f'原题：{esc(text)}'
+                f'<span style="font-size:12px;">　编者译，仅供参考</span></p>')
+    return out
 
 
 def _keywords(item: Item, dm: DomainMap) -> str:
@@ -125,7 +142,7 @@ SOURCE_NAMES = {
 
 
 def _provenance(item: Item) -> str:
-    """Publisher line for the reference list -- no adapter or line ids."""
+    """Publisher line under an entry -- no adapter or line ids."""
     bits = []
     publisher = (item.meta.get("journal") or item.meta.get("regulator")
                  or item.meta.get("venue") or item.meta.get("wire")
@@ -138,43 +155,59 @@ def _provenance(item: Item) -> str:
     return " · ".join(b for b in bits if b)
 
 
+def _field_value(quote) -> str:
+    value = f'<span style="color:{INK};">{esc(quote.text)}</span>'
+    if quote.translation and not is_chinese(quote.text):
+        value += f'<span style="color:{MUTED};">｜{esc(quote.translation)}</span>'
+    return value
+
+
+def _source_line(item: Item) -> str:
+    """Provenance directly under the entry: publisher, date, clickable original."""
+    return (f'<p style="margin:0 0 6px;font-size:13px;line-height:1.7;color:{MUTED};">'
+            f'出处：{esc(_provenance(item))}　'
+            f'<a href="{esc(item.url)}" style="color:{LINK};">查看原文 ↗</a></p>'
+            f'<p style="margin:0 0 22px;font-size:12px;line-height:1.6;color:{MUTED};'
+            f'word-break:break-all;">'
+            f'<a href="{esc(item.url)}" style="color:{LINK};">{esc(item.url)}</a></p>')
+
+
 def render_entry(item: Item, dm: DomainMap, index: int) -> str:
-    parts = [_entry_title(index, item.title), _figure(item), _keywords(item, dm)]
+    parts = [_entry_title(index, item.title, str(item.meta.get("title_zh") or "")),
+             _figure(item), _keywords(item, dm)]
     fields = [q for q in item.evidence.quotes if q.locator.startswith("ClinicalTrials.gov")]
-    prose = [q for q in item.evidence.quotes if q not in fields]
+    # The headline is already on the page; quoting it back as a pull quote
+    # says nothing twice.
+    prose = [q for q in item.evidence.quotes
+             if q not in fields and _normalise(q.text) != _normalise(item.title)]
     if fields:
         # A registry states its facts in fields. Three one-word pull quotes read
         # as noise; the same values on one line read as a record.
         parts.append(
             f'<p style="{SMALL}">'
-            + "　·　".join(f'{esc(q.locator.split("·")[-1].strip())}：'
-                          f'<span style="color:{INK};">{esc(q.text)}</span>'
+            + "　·　".join(f'{esc(q.locator.split("·")[-1].strip())}：{_field_value(q)}'
                           for q in fields[:4])
             + "</p>")
     for quote in prose[:3]:
         parts.append(_quote(quote.text.strip(), quote.translation))
     if not item.evidence.quotes:
-        parts.append(f'<p style="{SMALL}">本条未取得可核对的原文片段，详见文末原文链接。</p>')
+        parts.append(f'<p style="{SMALL}">本条未取得可核对的原文片段，详见原文链接。</p>')
     if item.meta.get("needs_human_read"):
         parts.append(f'<p style="{SMALL}">本条为公示列表变更，具体条目以原文为准。</p>')
+    parts.append(_source_line(item))
     return "".join(parts)
 
 
-def _reference_list(items: list[Item]) -> str:
-    """Sourcing note plus every entry's provenance and clickable original link."""
-    out = [_section("信源与原文", len(items))]
+def _sourcing_note(items: list[Item]) -> str:
+    """The general note on where everything comes from; provenance itself sits
+    under each entry."""
+    out = [_section("信源说明")]
     out.append(
         f'<p style="{SMALL}">本刊条目全部来自一手源：公司公告、监管机构、临床试验注册平台、'
-        f'同行评审期刊，不采用媒体转述，不采用预印本。正文摘录均为原文逐字引用，'
-        f'保留原始语言；非中文条目所附中文为编者译，仅供参考，以原文为准。'
-        f'中文内容仅作翻译与摘录，不作推断、不补背景、不作评价。</p>')
-    for index, item in enumerate(items, start=1):
-        out.append(
-            f'<p style="{SMALL}">'
-            f'<span style="color:{INK};font-weight:600;">{index:02d}</span>　'
-            f'{esc(_provenance(item))}<br/>'
-            f'<a href="{esc(item.url)}" style="color:{LINK};word-break:break-all;">'
-            f'{esc(item.url)}</a></p>')
+        f'同行评审期刊、专业学会，不采用媒体转述，不采用预印本。每条末尾标注出处与原文链接，'
+        f'可点击直达。正文摘录均为原文逐字引用，保留原始语言；非中文条目的标题与摘录所附中文'
+        f'均为编者译，仅供参考，以原文为准。中文内容仅作翻译与摘录，不作推断、不补背景、'
+        f'不作评价。</p>')
     figures = [i for i in items if from_meta(i.meta)]
     if figures:
         out.append(
@@ -245,7 +278,7 @@ def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
 
     if items:
         out.append(f'<div style="height:1px;background:{RULE};margin:34px 0 0;"></div>')
-        out.append(_reference_list(items))
+        out.append(_sourcing_note(items))
 
     # ``notes`` is accepted for call-site symmetry with the internal report and
     # deliberately not rendered: operator diagnostics are not reader copy.

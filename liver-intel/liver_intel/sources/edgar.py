@@ -91,6 +91,10 @@ class EdgarSource(BaseSource):
 
     # -- collection -------------------------------------------------------
     def collect(self, ctx: Context) -> list[Item]:
+        if not ctx.settings.contact:
+            ctx.note(f"[{self.id}] EDGAR requires a contact address in the User-Agent; "
+                     f"set LIVER_INTEL_CONTACT. Skipped.")
+            return []
         base = ctx.registry.by_id(SUBMISSIONS_ID)
         if base is None or not (base.is_usable or ctx.settings.allow_unverified):
             ctx.note(f"[{self.id}] {SUBMISSIONS_ID} is not verified -- skipping EDGAR.")

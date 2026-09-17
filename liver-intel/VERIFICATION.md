@@ -1,13 +1,49 @@
 # Verification runbook
 
-The implementation session had **no outbound network access** — every external
-host (sec.gov, clinicaltrials.gov, the three newswires, fda.gov, ema.europa.eu,
-hkexnews.hk, cninfo.com.cn) was refused at the egress proxy. So none of the
-acceptance criteria in the task sheet could be executed, and nothing in this
-repo should be read as "checked against the live service".
+The engine was built in a session that started without outbound network access
+and finished with it: every source below has since been exercised live, and the
+registry (`data/feeds/registry.json`) records what each probe returned. The
+acceptance bars are the handover's; the results recorded here are from the
+2026-09-16 runs and go stale, so re-run the steps rather than trust them.
 
-This is the runbook for the first run on a machine with network. Work it in task
-order; each step ends with the acceptance bar from the handover.
+This is the runbook for a first run on a new machine. Work it in task order;
+each step ends with the acceptance bar from the handover.
+
+## Step 0 — can this machine reach the sources at all?
+
+```bash
+export LIVER_INTEL_CONTACT="you@example.com"   # goes in the User-Agent; EDGAR requires it
+export ANTHROPIC_API_KEY="..."                 # or `ant auth login`; without it the run is rules-only
+python -m liver_intel.cli preflight
+```
+
+One line per host, fail-fast (no retries — it is a reachability probe). An HTTP
+error counts as reachable: a 404 proves the connection got through, only a
+refused tunnel does not.
+
+If every host reports `blocked` or `unreachable`, that is the environment's
+egress policy and no amount of engine work will fix it. Allow these hosts and
+re-run preflight — a policy change takes effect immediately, no new session is
+needed:
+
+    www.globenewswire.com   www.businesswire.com   www.prnewswire.com
+    www.sec.gov             data.sec.gov           clinicaltrials.gov
+    api.fda.gov             www.fda.gov            www.accessdata.fda.gov
+    www.ema.europa.eu       www.nmpa.gov.cn        www.cde.org.cn
+    eutils.ncbi.nlm.nih.gov pubmed.ncbi.nlm.nih.gov
+    www.hkexnews.hk         www.cninfo.com.cn      easl.eu   www.aasld.org
+
+Three hosts refuse this client at the origin, not the gateway (recorded in the
+registry as `blocked`): businesswire.com (403), cninfo.com.cn (412),
+nmpa.gov.cn (403). These are handled per the handover — no retry, manual check.
+
+Only once preflight is green does the rest of this runbook mean anything.
+
+```bash
+python -m liver_intel.cli status
+```
+
+---
 
 ## Step 0 — can this machine reach the sources at all?
 

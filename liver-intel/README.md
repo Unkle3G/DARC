@@ -106,14 +106,32 @@ The two outputs are deliberately different documents.
 | Grades | never shown — sections read 今日头条 / 前沿速览 / 最新动态 (`config.SECTION_NAMES`) | P0/P1/P2 |
 | Line ids, signal names, adapter ids, score | never shown | all present |
 | Per-entry labels | searchable keywords (`keywords.py`) | 线路 / 来源 / 研究标签 / 命中信号 |
-| Sourcing note and links | one reference list at the end, links clickable | inline per entry |
+| Provenance and links | under every entry: publisher · date · clickable original; the general sourcing note at the end | inline per entry |
 | Operator notes | never rendered | printed under 运行提示 |
 | Brand | `config.BRAND` = HepaDaily | same |
 
-Quotes keep the source language in both. A non-Chinese quote is followed by its
-Chinese rendering marked 编者译，仅供参考; a Chinese quote is shown as written and
-never translated. When no model ran there is no translation, and the original
-stands alone — the engine does not invent one.
+Titles and quotes keep the source language in both. In the article a
+non-Chinese title is headed by its Chinese rendering with the original shown
+underneath as 原题, and a non-Chinese quote is followed by its rendering; both
+are marked 编者译，仅供参考. A Chinese source is shown as written and never
+translated. Renderings come from two places: the significance step translates
+the quotes it finds, and `translate.py` fills in the rest for the items that
+ship — the title and the sentences the deterministic rules quoted. Every
+rendering is checked (`assert_not_evaluative`, must be Chinese, must differ from
+the source) and dropped rather than published when it fails. When no model ran
+there is no rendering, the original stands alone, and the internal report says
+`MODEL STEP DID NOT RUN` at the top of 运行提示.
+
+## Model credentials
+
+Section 0 makes the model step part of the method: the significance step
+(`llm.py`) and the renderings (`translate.py`) both need an Anthropic credential
+— `ANTHROPIC_API_KEY` in the environment, or a profile from `ant auth login`,
+plus `pip install anthropic`. Without one the pipeline still runs, on
+deterministic rules alone, and every report produced that way carries the
+warning above. Do not publish an article from a rules-only run as if it were
+the full method. Only the items selected for the day are sent for rendering, so
+the cost is bounded by the daily cap.
 
 ## Materials library (backend only)
 
@@ -170,6 +188,19 @@ Fridays; `scripts/crontab.example` has the schedule (06:30 Beijing, Mon–Fri, p
 a weekly re-verification of the registry). State lives in SQLite at
 `data/state.sqlite3`: NCT status, published items, page hashes and the weekly
 pool.
+
+Two environment variables are required: `LIVER_INTEL_CONTACT` (the address in
+the User-Agent — EDGAR requires one, and the adapter skips itself when it is
+missing; nothing is baked into the source) and an Anthropic credential (above).
+
+A daily run collects from one day before its coverage window (`pipeline.default_since`)
+— a release published late in the US day carries the previous date and lands
+after that morning's run. The seen-items table makes the overlap harmless; an
+item dated before the coverage window is labelled 早于本期覆盖窗口 in the
+internal report. `--since` overrides this, and `backfill` is the historical
+sweep. The registry sweep is bounded the same way and ordered newest-first; a
+study first seen already terminated is labelled 首次进入状态表, because the
+registry does not record when the status changed.
 
 ## Tests
 

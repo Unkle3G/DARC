@@ -85,6 +85,10 @@ def render_item(item: Item, dm: DomainMap, index: int) -> str:
     lines = [
         f"### {index}. {item.title}",
         "",
+    ]
+    if item.meta.get("title_zh"):
+        lines.append(f"- 译题（编者译）：{item.meta['title_zh']}")
+    lines += [
         f"- 线：{_line_labels(item, dm)}",
         f"- 来源：{_source_line(item)}",
         f"- 链接：{item.url}",
@@ -95,6 +99,11 @@ def render_item(item: Item, dm: DomainMap, index: int) -> str:
     lines.extend(_evidence_block(item))
     if item.meta.get("state_changes"):
         lines.append(f"- 状态变化：{item.meta['state_changes']}")
+    if item.meta.get("first_sighting"):
+        lines.append("- 备注：该研究首次进入状态表，注册库不记录状态变更日期，"
+                     "终止时间以原文页面为准")
+    if item.meta.get("published_before_window"):
+        lines.append(f"- 备注：发布于 {item.date}，早于本期覆盖窗口，本期首次采集")
     if item.meta.get("why_stopped"):
         lines.append(f"- 终止原因（原文）：{item.meta['why_stopped']}")
     if item.meta.get("needs_human_read"):

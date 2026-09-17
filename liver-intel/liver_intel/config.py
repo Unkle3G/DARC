@@ -22,10 +22,12 @@ DOMAIN_MAP = DATA_DIR / "domain_map_liver_v3.md"
 CONFERENCES = DATA_DIR / "conferences.json"
 
 # Contact address is mandated by the SEC EDGAR access policy (T2) and is good
-# manners everywhere else.  Override with LIVER_INTEL_CONTACT.
-CONTACT = os.environ.get("LIVER_INTEL_CONTACT", "unkle.hsu@gmail.com")
+# manners everywhere else. It comes from LIVER_INTEL_CONTACT and nowhere else:
+# an address written into the source ends up in a public repository, and the
+# EDGAR adapter refuses to run without one rather than identify nobody.
+CONTACT = os.environ.get("LIVER_INTEL_CONTACT", "").strip()
 USER_AGENT = os.environ.get(
-    "LIVER_INTEL_UA", f"liver-intel/1.0 ({CONTACT})"
+    "LIVER_INTEL_UA", f"liver-intel/1.0 ({CONTACT})" if CONTACT else "liver-intel/1.0"
 )
 
 # Report timezone: the daily run must finish before 08:00 Beijing time and

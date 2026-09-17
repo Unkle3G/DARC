@@ -132,3 +132,30 @@ def test_rule_signals_carry_verbatim_source_quotes(wired):
     assert validate_quotes(madrigal, source) == []
     body = result.report_path.read_text(encoding="utf-8")
     assert "met the primary endpoint" in body
+
+
+def test_daily_window_opens_one_day_before_coverage():
+    assert pipeline.default_since("2026-09-17") == "2026-09-15"   # Thursday
+    assert pipeline.default_since("2026-09-14") == "2026-09-10"   # Monday reaches back
+
+
+def test_repeated_notes_collapse_to_a_count():
+    notes = ["no line matched: out of scope"] * 3 + ["[ctgov] examined 5 studies"]
+    assert pipeline._collapse(notes) == ["no line matched: out of scope × 3",
+                                         "[ctgov] examined 5 studies"]
+
+
+def test_a_rules_only_run_says_so_in_the_report(wired):
+    result = pipeline.run_daily(wired, today="2026-09-14", only=["newswire"])
+    body = result.report_path.read_text(encoding="utf-8")
+    assert "MODEL STEP DID NOT RUN" in body
+    assert "no line matched: out of scope × " not in body or result.collected > 1
+
+
+def test_an_item_older_than_the_window_is_labelled_a_late_pickup(wired):
+    # Wednesday's report covers Tuesday; a Monday release is inside the
+    # collection window but before the coverage window.
+    result = pipeline.run_daily(wired, today="2026-09-16", only=["newswire"])
+    madrigal = next(i for i in result.daily if i.title.startswith("Madrigal"))
+    assert madrigal.meta.get("published_before_window") is True
+    assert "早于本期覆盖窗口" in result.report_path.read_text(encoding="utf-8")
