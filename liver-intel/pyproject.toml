@@ -13,12 +13,13 @@ dependencies = [
     # HKEX publishes announcements as PDFs whose search headline is only a
     # category label, so the document is the only place the news exists.
     "pypdf>=5.0",
+    # The significance step and the Chinese renderings are part of the method
+    # (task sheet section 0), not an extra: the SDK is a hard dependency, and
+    # the credential (ANTHROPIC_API_KEY) is the only thing left to configure.
+    "anthropic>=1.0",
 ]
 
 [project.optional-dependencies]
-# The significance step is optional: without it the engine grades on
-# deterministic rules alone.
-llm = ["anthropic>=0.40"]
 dev = ["pytest>=8", "pyflakes>=3"]
 
 [project.scripts]

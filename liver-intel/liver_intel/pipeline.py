@@ -94,7 +94,11 @@ def enrich(items: Iterable[Item], ctx: Context, judge: llm.Judge,
                 or item.meta.get("body") or ""),
             str(item.meta.get("summary") or ""),
         ]))
-        llm.apply(item, quotable, judge)
+        if item.lines:
+            # Out-of-scope documents are dropped by the selector whatever the
+            # model says; sending them costs half the day's model budget for
+            # nothing (77 of 151 collected items matched no line).
+            llm.apply(item, quotable, judge)
         grading.apply(item, dm=ctx.domain_map, today=ctx.today,
                       extra_signals=item.evidence.signals)
         _attach_rule_evidence(item, quotable, tagger)

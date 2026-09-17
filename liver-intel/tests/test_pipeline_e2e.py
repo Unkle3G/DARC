@@ -159,3 +159,16 @@ def test_an_item_older_than_the_window_is_labelled_a_late_pickup(wired):
     madrigal = next(i for i in result.daily if i.title.startswith("Madrigal"))
     assert madrigal.meta.get("published_before_window") is True
     assert "早于本期覆盖窗口" in result.report_path.read_text(encoding="utf-8")
+
+
+def test_model_step_skips_out_of_scope_documents(wired, monkeypatch):
+    calls = []
+
+    class Counting:
+        def judge(self, item, source_text):
+            calls.append(item.title)
+            return NullJudge().judge(item, source_text)
+
+    monkeypatch.setattr(pipeline.llm, "build_judge", lambda enabled=True: Counting())
+    pipeline.run_daily(wired, today="2026-09-14", only=["newswire"])
+    assert calls and all("Vendor conference" not in title for title in calls)
