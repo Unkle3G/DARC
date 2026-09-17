@@ -11,7 +11,8 @@ from datetime import date, timedelta
 
 from . import grade as grading
 from . import images as image_tools
-from . import llm, people as people_tools, report, report_wechat, select, translate, worksheet
+from . import (llm, people as people_tools, report, report_md, report_wechat,
+               select, translate, worksheet)
 from .conference import Calendar
 from .config import Settings
 from .domain_map import DomainMap, load as load_domain_map
@@ -35,6 +36,7 @@ class RunResult:
     report_path: Path | None = None
     json_path: Path | None = None
     wechat_path: Path | None = None
+    markdown_path: Path | None = None
     worksheet_path: Path | None = None
 
     @property
@@ -265,6 +267,11 @@ def _write_outputs(settings: Settings, result: RunResult, dm: DomainMap,
                                             weekly_pool_size=len(result.weekly))
         result.wechat_path = settings.out_dir / f"liver_daily_{today}_wechat.html"
         result.wechat_path.write_text(article, encoding="utf-8")
+        # The same article as Markdown, for pasting into MDNice.
+        markdown = report_md.wechat_markdown(result.daily, today, dm, notes=result.notes,
+                                             weekly_pool_size=len(result.weekly))
+        result.markdown_path = settings.out_dir / f"liver_daily_{today}_mdnice.md"
+        result.markdown_path.write_text(markdown, encoding="utf-8")
 
 
 def render(settings: Settings, today: str, wechat: bool | None = None) -> RunResult:

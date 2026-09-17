@@ -170,9 +170,17 @@ Nothing from this table is ever rendered into an article.
 
 ## 公众号 output
 
-`daily --wechat` writes `out/liver_daily_<date>_wechat.html` alongside the
-markdown: one pasteable long-form article, inline styles only (the editor strips
-`<style>` and `<link>`), sized for the ~677px column.
+`daily --wechat` writes the reader-facing article in two forms:
+
+* `out/liver_daily_<date>_wechat.html` — styled inline (the WeChat editor strips
+  `<style>` and `<link>`), sized for the ~677px column, pasteable straight into
+  the editor;
+* `out/liver_daily_<date>_mdnice.md` — the same article as **plain Markdown for
+  MDNice (墨滴)**, where the theme does the styling. It carries no HTML at all:
+  inline styles would survive MDNice and clash with the theme. Keywords are
+  code spans (what MDNice's themes render as chips), the calendar is a table,
+  and links stay ordinary Markdown links — turn on MDNice's 「微信外链转脚注」 and
+  every 查看原文 becomes a numbered footnote, which is what WeChat allows.
 
 The no-commentary rule still applies. The layout gives the material more room —
 section headers, figures, pull quotes — but adds no interpretation: the prose is

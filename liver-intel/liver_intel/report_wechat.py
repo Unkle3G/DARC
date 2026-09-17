@@ -43,7 +43,7 @@ P = "margin:0 0 18px;font-size:16px;line-height:1.8;color:%s;" % INK
 SMALL = "margin:0 0 10px;font-size:13px;line-height:1.7;color:%s;" % MUTED
 
 
-def _normalise(text: str) -> str:
+def normalise(text: str) -> str:
     return " ".join((text or "").split()).strip().lower()
 
 
@@ -141,7 +141,7 @@ SOURCE_NAMES = {
 }
 
 
-def _provenance(item: Item) -> str:
+def provenance(item: Item) -> str:
     """Publisher line under an entry -- no adapter or line ids."""
     bits = []
     publisher = (item.meta.get("journal") or item.meta.get("regulator")
@@ -168,7 +168,7 @@ def _field_value(quote) -> str:
 def _source_line(item: Item) -> str:
     """Provenance directly under the entry: publisher, date, clickable original."""
     return (f'<p style="margin:0 0 6px;font-size:13px;line-height:1.7;color:{MUTED};">'
-            f'出处：{esc(_provenance(item))}　'
+            f'出处：{esc(provenance(item))}　'
             f'<a href="{esc(item.url)}" style="color:{LINK};">查看原文 ↗</a></p>'
             f'<p style="margin:0 0 22px;font-size:12px;line-height:1.6;color:{MUTED};'
             f'word-break:break-all;">'
@@ -182,7 +182,7 @@ def render_entry(item: Item, dm: DomainMap, index: int) -> str:
     # The headline is already on the page; quoting it back as a pull quote
     # says nothing twice.
     prose = [q for q in item.evidence.quotes
-             if q not in fields and _normalise(q.text) != _normalise(item.title)]
+             if q not in fields and normalise(q.text) != normalise(item.title)]
     if fields:
         # A registry states its facts in fields. Three one-word pull quotes read
         # as noise; the same values on one line read as a record. The lead

@@ -118,6 +118,8 @@ def cmd_daily(args: argparse.Namespace) -> int:
         print(f"wrote {result.json_path}")
     if result.wechat_path:
         print(f"wrote {result.wechat_path}  (paste into the WeChat editor)")
+    if result.markdown_path:
+        print(f"wrote {result.markdown_path}  (paste into MDNice)")
     if result.worksheet_path:
         print(f"wrote {result.worksheet_path}  (fill `zh`, then: liver-intel render "
               f"--date {result.report_date})")
@@ -135,6 +137,8 @@ def cmd_render(args: argparse.Namespace) -> int:
     print(f"wrote {result.json_path}")
     if result.wechat_path:
         print(f"wrote {result.wechat_path}")
+    if result.markdown_path:
+        print(f"wrote {result.markdown_path}")
     return 0
 
 
@@ -330,7 +334,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-llm", action="store_true",
                    help="skip the significance step, use deterministic rules only")
     p.add_argument("--wechat", action="store_true",
-                   help="also render a WeChat Official Account long-form article")
+                   help="also render the WeChat article, as styled HTML and as "
+                        "Markdown for MDNice")
     p.add_argument("--with-images", action="store_true",
                    help="download figures published by the source documents")
     p.add_argument("--allow-unverified", action="store_true",
