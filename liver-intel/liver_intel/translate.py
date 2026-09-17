@@ -151,6 +151,11 @@ def needs_rendering(text: str) -> bool:
     return bool((text or "").strip()) and not is_chinese(text)
 
 
+def quote_needs_rendering(quote: Any) -> bool:
+    """Phase notation is kept as the registry writes it, so it is never missing."""
+    return needs_rendering(quote.text) and not quote.locator.endswith("· phases")
+
+
 def _accept(source: str, rendering: str, where: str) -> str:
     """A rendering is kept only when it is Chinese, differs from its source and
     carries no judgement. Anything else is dropped rather than published."""
@@ -175,7 +180,7 @@ def apply(item: Item, translator: Translator) -> int:
     if needs_rendering(item.title) and not item.meta.get("title_zh"):
         slots.append(("title", item.title))
     for quote in item.evidence.quotes:
-        if needs_rendering(quote.text) and not quote.translation:
+        if quote_needs_rendering(quote) and not quote.translation:
             slots.append(("quote", quote))
     if not slots:
         return 0
@@ -203,6 +208,6 @@ def translate_items(items: list[Item], translator: Translator) -> tuple[int, int
         filled += apply(item, translator)
     missing = sum(
         (1 if needs_rendering(i.title) and not i.meta.get("title_zh") else 0)
-        + sum(1 for q in i.evidence.quotes if needs_rendering(q.text) and not q.translation)
+        + sum(1 for q in i.evidence.quotes if quote_needs_rendering(q) and not q.translation)
         for i in items)
     return filled, missing

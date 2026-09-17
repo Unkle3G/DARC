@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import Item, Quote, _normalise_ws
-from .translate import _accept, needs_rendering
+from .translate import _accept, needs_rendering, quote_needs_rendering
 
 RULES = (
     "把每个 text 逐字、完整地译成简体中文，填入 zh。",
@@ -47,9 +47,7 @@ def _slots(item: Item) -> list[dict[str, Any]]:
     if needs_rendering(item.title) and not item.meta.get("title_zh"):
         out.append({"id": f"{item.key}:title", "kind": "title", "text": item.title, "zh": ""})
     for index, quote in enumerate(item.evidence.quotes):
-        if quote.locator.endswith("· phases"):
-            continue          # phase notation stays as the registry writes it
-        if needs_rendering(quote.text) and not quote.translation:
+        if quote_needs_rendering(quote) and not quote.translation:
             kind = "field" if quote.locator.startswith("ClinicalTrials.gov") else "quote"
             out.append({"id": f"{item.key}:quote:{index}", "kind": kind,
                         "locator": quote.locator, "text": quote.text, "zh": ""})
