@@ -111,3 +111,12 @@ def test_supplementary_quote_must_exist_verbatim_in_the_source(tmp_path):
     assert added.text == "GPC3 is highly expressed in HCC." and added.locator == "supplementary"
     assert added.translation == "GPC3 在 HCC 中高表达。"
     assert "not found verbatim" in reasons[0]
+
+
+def test_phase_notation_is_never_offered_for_rendering(tmp_path):
+    item = make()
+    item.evidence.quotes.append(Quote(text="PHASE3", locator="ClinicalTrials.gov · phases"))
+    path = tmp_path / "w.json"
+    worksheet.write([item], path, "2026-09-14")
+    sheet = json.loads(path.read_text(encoding="utf-8"))
+    assert all(e["text"] != "PHASE3" for e in sheet["entries"])

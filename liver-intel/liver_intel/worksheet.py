@@ -27,6 +27,7 @@ RULES = (
     "药名、药物代号、化合物名、试验名称、公司名、基因/靶点名、注册号、期刊名一律保持原文写法，"
     "不译、不换成中文通用名（cemiplimab 写 cemiplimab，不写西米普利单抗）。",
     "符号与记法与原文一致：+/- 就写 +/-，不改成 ±；大小写、连字符照原文。",
+    "试验分期用原文写法：Phase 3 写 Phase 3，PHASE3 写 PHASE3，不写 III期；注册库的 phases 字段值不译。",
     "只译原文写了的内容：不加背景、不加解释、不加术语注释、不加括号说明。",
     "不预测、不评价、不排序，不使用利好/利空/有望/重磅之类的措辞。",
     "拿不准的留空（zh 保持 \"\"），引擎会让原文单独呈现；宁缺毋滥。",
@@ -46,6 +47,8 @@ def _slots(item: Item) -> list[dict[str, Any]]:
     if needs_rendering(item.title) and not item.meta.get("title_zh"):
         out.append({"id": f"{item.key}:title", "kind": "title", "text": item.title, "zh": ""})
     for index, quote in enumerate(item.evidence.quotes):
+        if quote.locator.endswith("· phases"):
+            continue          # phase notation stays as the registry writes it
         if needs_rendering(quote.text) and not quote.translation:
             kind = "field" if quote.locator.startswith("ClinicalTrials.gov") else "quote"
             out.append({"id": f"{item.key}:quote:{index}", "kind": kind,

@@ -30,7 +30,9 @@ shipped, and you fill it in. No external model, no key.
    - drug names, codes, compound names, trial names, company names, targets,
      registry ids and journal names stay exactly as written -- no Chinese
      INN substitution (cemiplimab stays cemiplimab), and notation stays
-     verbatim (`+/-` stays `+/-`, never `±`);
+     verbatim (`+/-` stays `+/-`, never `±`); trial phases keep the source's
+     wording (`Phase 3` stays `Phase 3`, never `III期`; the worksheet does
+     not even offer the registry's `phases` field);
    - the original always comes first and the rendering after it; the
      renderer enforces this, do not work around it;
    - when a reader needs to know what a product or trial *is*, do not write
