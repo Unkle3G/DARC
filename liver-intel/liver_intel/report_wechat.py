@@ -332,4 +332,20 @@ def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
     # ``notes`` is accepted for call-site symmetry with the internal report and
     # deliberately not rendered: operator diagnostics are not reader copy.
     out.append("</div>")
-    return "\n".join(out)
+    return _document(f"{brand}｜{report_date}", "\n".join(out))
+
+
+def _document(title: str, article: str) -> str:
+    """Wrap the article so the file opens correctly in a browser.
+
+    The article itself is the ``<div>``: that is what you select and copy into
+    the WeChat editor. But a bare fragment carries no encoding declaration, and
+    a browser opening it from disk guesses -- which turned every Chinese
+    character into mojibake in the one workflow this file exists for. The
+    wrapper declares UTF-8 and nothing else; it is not copied, and it adds no
+    stylesheet for the editor to strip.
+    """
+    return ("<!DOCTYPE html>\n"
+            '<html lang="zh-CN">\n<head>\n<meta charset="utf-8"/>\n'
+            '<meta name="viewport" content="width=device-width,initial-scale=1"/>\n'
+            f"<title>{esc(title)}</title>\n</head>\n<body>\n{article}\n</body>\n</html>\n")

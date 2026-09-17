@@ -51,6 +51,17 @@ def test_article_has_no_external_stylesheet(domain_map):
     assert 'style="' in article           # everything is inline instead
 
 
+def test_the_file_declares_its_encoding(domain_map):
+    """A bare fragment opened from disk is guessed at, and every Chinese
+    character came out as mojibake -- in the one workflow the file exists for."""
+    article = wechat_html([make()], "2026-09-14", domain_map)
+    assert article.startswith("<!DOCTYPE html>")
+    assert '<meta charset="utf-8"/>' in article
+    assert "<title>HepaDaily｜2026-09-14</title>" in article
+    # the article itself is still the div that gets copied into the editor
+    assert article.index("<body>") < article.index('<div style="max-width:677px')
+
+
 def test_internal_grades_never_reach_the_reader(domain_map):
     """P0/P1/P2, line ids, signal names and adapter ids are triage, not copy."""
     item = make()
@@ -203,7 +214,9 @@ def test_item_without_a_figure_renders_cleanly(domain_map):
 def test_watermark_is_prominent(domain_map):
     article = wechat_html([make()], "2026-09-14", domain_map, watermark="演示数据")
     assert "演示数据" in article
-    assert article.index("演示数据") < article.index("HepaDaily")
+    # ahead of the headline itself -- the <title> in the document wrapper is
+    # not what a reader sees.
+    assert article.index("演示数据") < article.index("<h1")
 
 
 def test_empty_day_still_renders(domain_map):
