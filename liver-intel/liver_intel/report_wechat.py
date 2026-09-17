@@ -225,10 +225,11 @@ def _sourcing_note(items: list[Item]) -> str:
 def _conference_block(report_date: str, calendar: Calendar | None = None) -> str:
     """Reader-facing conference block: dates, and when abstracts go public."""
     calendar = calendar or Calendar.load()
-    upcoming = calendar.upcoming(report_date)
-    if not upcoming:
+    upcoming = calendar.upcoming(report_date, kind="annual")
+    stcs = calendar.upcoming(report_date, kind="stc")
+    if not upcoming and not stcs:
         return ""
-    out = [_section("会议日历", len(upcoming))]
+    out = [_section("会议日历", len(upcoming) + len(stcs))]
     for conference, days in upcoming:
         when = "进行中" if days <= 0 else f"距开幕 {days} 天"
         place = f"　{conference.location}" if conference.location else ""
@@ -252,6 +253,21 @@ def _conference_block(report_date: str, calendar: Calendar | None = None) -> str
                 f'</tr>' for m in milestones)
             out.append(f'<table style="border-collapse:collapse;font-size:13px;'
                        f'line-height:1.7;margin:2px 0 16px;">{rows}</table>')
+    if stcs:
+        # Single-topic conferences: one line each, dates and place, nothing more.
+        out.append(f'<p style="margin:18px 0 6px;font-size:14px;font-weight:600;'
+                   f'color:{INK};">单主题会议（STC）</p>')
+        rows = "".join(
+            f'<tr>'
+            f'<td style="padding:3px 12px 3px 0;color:{INK};vertical-align:top;">'
+            f'{esc(c.name)}</td>'
+            f'<td style="padding:3px 12px 3px 0;color:{MUTED};white-space:nowrap;'
+            f'vertical-align:top;">{esc(c.start)} 至 {esc(c.end)}</td>'
+            f'<td style="padding:3px 0;color:{MUTED};vertical-align:top;">'
+            f'{esc(c.location)}</td>'
+            f'</tr>' for c, _ in stcs)
+        out.append(f'<table style="border-collapse:collapse;font-size:13px;'
+                   f'line-height:1.7;margin:0 0 16px;">{rows}</table>')
     return "".join(out)
 
 

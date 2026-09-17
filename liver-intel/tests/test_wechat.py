@@ -276,3 +276,17 @@ def test_conference_block_is_a_dated_timeline(domain_map, monkeypatch):
     assert "解禁" not in block and "摘要录用通知" not in block
     assert (block.index("摘要投稿截止") < block.index("Late-breaker 投稿截止")
             < block.index("Late-breaker embargo lift"))
+
+
+def test_stcs_render_as_a_compact_list_under_the_annual_meetings(domain_map):
+    from liver_intel import report_wechat
+    from liver_intel.conference import Calendar, Conference
+    calendar = Calendar(conferences=[
+        Conference(id="A", name="Annual X", kind="annual", start="2026-11-05", end="2026-11-09",
+                   verified=True, abstract_close="2026-05-28"),
+        Conference(id="S", name="STC Almaty", kind="stc", start="2026-10-08", end="2026-10-09",
+                   verified=True, location="Almaty, Kazakhstan")])
+    block = report_wechat._conference_block("2026-09-17", calendar)
+    assert "单主题会议（STC）" in block and "STC Almaty" in block and "Almaty, Kazakhstan" in block
+    assert block.index("Annual X") < block.index("单主题会议（STC）") < block.index("STC Almaty")
+    assert "2 条" in block

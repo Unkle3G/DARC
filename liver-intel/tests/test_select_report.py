@@ -146,3 +146,26 @@ def test_conference_milestones_print_only_what_the_society_published(domain_map)
     assert "Late-breaker embargo lift：2026-11-05" in text
     assert "未公布：摘要投稿开放、摘要录用通知、摘要 embargo lift、Late-breaker 录用通知" in text
     assert "此前处于禁发期" not in text
+
+
+def test_single_topic_conferences_are_listed_but_open_no_window(domain_map):
+    from liver_intel.conference import Calendar, Conference
+    from liver_intel.report import conference_lines
+    calendar = Calendar(conferences=[
+        Conference(id="A", name="Annual", kind="annual", start="2026-11-05", end="2026-11-09",
+                   verified=True),
+        Conference(id="S", name="STC Kumamoto", kind="stc", start="2026-09-18", end="2026-09-19",
+                   verified=True, location="Kumamoto", source_url="https://example.org/c")])
+    assert calendar.active("2026-09-18") is None          # an STC never opens a window
+    text = "\n".join(conference_lines("2026-09-17", calendar))
+    assert "### 单主题会议（STC）" in text
+    assert "- STC Kumamoto：2026-09-18 至 2026-09-19（还有 1 天，Kumamoto）" in text
+    assert text.index("**Annual**") < text.index("STC Kumamoto")
+
+
+def test_upcoming_is_not_capped_by_default(domain_map):
+    from liver_intel.conference import Calendar, Conference
+    calendar = Calendar(conferences=[
+        Conference(id=f"C{i}", name=f"C{i}", start=f"2027-0{i}-01", end=f"2027-0{i}-02", verified=True)
+        for i in range(1, 7)])
+    assert len(calendar.upcoming("2026-09-17")) == 6

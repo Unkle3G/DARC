@@ -50,6 +50,10 @@ class Conference:
     id: str
     name: str
     society: str = ""
+    #: "annual" (the society's congress) or "stc" (a single-topic conference).
+    #: Only an annual meeting opens a collection window; a two-day STC every
+    #: few weeks would otherwise keep the window open most of the year.
+    kind: str = "annual"
     location: str = ""
     start: str | None = None
     end: str | None = None
@@ -127,16 +131,20 @@ class Calendar:
         except ValueError:
             return None
         for conference in self.conferences:
+            if conference.kind != "annual":
+                continue
             window = conference.window(self.boost_days_before, self.boost_days_after)
             if window and window[0] <= day <= window[1]:
                 return conference
         return None
 
-    def upcoming(self, today: str, limit: int = 4) -> list[tuple[Conference, int]]:
+    def upcoming(self, today: str, limit: int | None = None,
+                 kind: str | None = None) -> list[tuple[Conference, int]]:
         """Verified conferences still ahead, with days remaining.
 
         A meeting already under way counts as upcoming until it ends; an
         unverified entry never appears, for the same reason it opens no window.
+        ``kind`` narrows to annual meetings or STCs.
         """
         try:
             day = date.fromisoformat(today)
@@ -144,7 +152,7 @@ class Calendar:
             return []
         out: list[tuple[Conference, int]] = []
         for conference in self.conferences:
-            if not conference.usable:
+            if not conference.usable or (kind and conference.kind != kind):
                 continue
             try:
                 start = date.fromisoformat(conference.start)
@@ -155,7 +163,7 @@ class Calendar:
                 continue
             out.append((conference, (start - day).days))
         out.sort(key=lambda pair: pair[1])
-        return out[:limit]
+        return out[:limit] if limit else out
 
     @property
     def unverified(self) -> list[Conference]:

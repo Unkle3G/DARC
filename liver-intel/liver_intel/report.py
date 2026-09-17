@@ -123,8 +123,9 @@ def conference_lines(report_date: str, calendar: Calendar | None = None) -> list
     Only verified entries appear -- a date nobody confirmed is not a schedule.
     """
     calendar = calendar or Calendar.load()
-    upcoming = calendar.upcoming(report_date)
-    if not upcoming:
+    upcoming = calendar.upcoming(report_date, kind="annual")
+    stcs = calendar.upcoming(report_date, kind="stc")
+    if not upcoming and not stcs:
         return []
     out = ["## 会议日历", ""]
     for conference, days in upcoming:
@@ -141,6 +142,15 @@ def conference_lines(report_date: str, calendar: Calendar | None = None) -> list
             out.append(f"  - 未公布：{'、'.join(missing)}")
         if conference.source_url:
             out.append(f"  - 出处：{conference.source_url}")
+    if stcs:
+        out.append("")
+        out.append("### 单主题会议（STC）")
+        out.append("")
+        for conference, days in stcs:
+            when = "进行中" if days <= 0 else f"还有 {days} 天"
+            place = f"，{conference.location}" if conference.location else ""
+            out.append(f"- {conference.name}：{conference.start} 至 {conference.end}"
+                       f"（{when}{place}）  出处：{conference.source_url or '—'}")
     pending = [c.id for c in calendar.unverified]
     if pending:
         out.append(f"- 待核实：{'、'.join(pending)}（日期未确认，不生效）")
