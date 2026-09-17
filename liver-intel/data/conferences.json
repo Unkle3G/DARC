@@ -53,21 +53,23 @@
       "id": "APASL2027",
       "name": "APASL Annual Meeting 2027",
       "society": "APASL",
-      "start": null,
-      "end": null,
+      "start": "2027-04-01",
+      "end": "2027-04-04",
       "late_breaker_release": null,
-      "verified": false,
-      "source_url": null,
-      "note": "apasl.info is refused at the network gateway (403 on 2026-09-17), so nothing could be read. Allow the host, then fill these in from the society's page.",
-      "location": "",
+      "verified": true,
+      "source_url": "https://www.apasl.info/",
+      "note": "Read 2026-09-17 from https://www.apasl.info/ (apasl.info redirects there): \"APASL Annual Meeting 2027 Sydney / April 1-4, 2027 / https://www.apasl2027.org/\" and \"Abstract submissions close 21st September, 23:59 AEST\" -- the page states no year for the deadline; taken as 2026 since the page is dated 2026 and says submissions are open now. Abstract opening date, notification and every late-breaker date are on the congress site www.apasl2027.org, which the network gateway refuses; left null. The same page lists single-topic conferences (STC 2026 Kumamoto 18-19 Sep, Almaty 8-9 Oct, Dhaka 5-6 Dec; STC 2027 Bishkek, Kaohsiung, Danang, Chongqing, Karachi) and the Annual Meeting 2028 Seoul (April 13-16, 2028); not tracked as entries.",
+      "location": "Sydney, Australia",
       "abstract_open": null,
-      "abstract_close": null,
+      "abstract_close": "2026-09-21",
       "abstract_notification": null,
       "abstract_release": null,
       "late_breaker_open": null,
       "late_breaker_close": null,
       "late_breaker_notification": null,
-      "date_sources": {}
+      "date_sources": {
+        "abstract_close": "https://www.apasl.info/"
+      }
     }
   ]
 }
