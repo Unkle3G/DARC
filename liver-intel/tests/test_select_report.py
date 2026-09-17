@@ -158,7 +158,7 @@ def test_single_topic_conferences_are_listed_but_open_no_window(domain_map):
                    verified=True, location="Kumamoto", source_url="https://example.org/c")])
     assert calendar.active("2026-09-18") is None          # an STC never opens a window
     text = "\n".join(conference_lines("2026-09-17", calendar))
-    assert "### 单主题会议（STC）" in text
+    assert "### APASL 专题会（STC）" in text
     assert "- STC Kumamoto：2026-09-18 至 2026-09-19（还有 1 天，Kumamoto）" in text
     assert text.index("**Annual**") < text.index("STC Kumamoto")
 

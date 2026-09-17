@@ -256,7 +256,7 @@ def _conference_block(report_date: str, calendar: Calendar | None = None) -> str
     if stcs:
         # Single-topic conferences: one line each, dates and place, nothing more.
         out.append(f'<p style="margin:18px 0 6px;font-size:14px;font-weight:600;'
-                   f'color:{INK};">单主题会议（STC）</p>')
+                   f'color:{INK};">APASL 专题会（STC）</p>')
         rows = "".join(
             f'<tr>'
             f'<td style="padding:3px 12px 3px 0;color:{INK};vertical-align:top;">'

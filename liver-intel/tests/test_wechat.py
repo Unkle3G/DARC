@@ -287,6 +287,6 @@ def test_stcs_render_as_a_compact_list_under_the_annual_meetings(domain_map):
         Conference(id="S", name="STC Almaty", kind="stc", start="2026-10-08", end="2026-10-09",
                    verified=True, location="Almaty, Kazakhstan")])
     block = report_wechat._conference_block("2026-09-17", calendar)
-    assert "单主题会议（STC）" in block and "STC Almaty" in block and "Almaty, Kazakhstan" in block
-    assert block.index("Annual X") < block.index("单主题会议（STC）") < block.index("STC Almaty")
+    assert "APASL 专题会（STC）" in block and "STC Almaty" in block and "Almaty, Kazakhstan" in block
+    assert block.index("Annual X") < block.index("APASL 专题会（STC）") < block.index("STC Almaty")
     assert "2 条" in block

@@ -144,7 +144,7 @@ def conference_lines(report_date: str, calendar: Calendar | None = None) -> list
             out.append(f"  - 出处：{conference.source_url}")
     if stcs:
         out.append("")
-        out.append("### 单主题会议（STC）")
+        out.append("### APASL 专题会（STC）")
         out.append("")
         for conference, days in stcs:
             when = "进行中" if days <= 0 else f"还有 {days} 天"
