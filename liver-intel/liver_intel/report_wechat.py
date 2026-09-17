@@ -20,6 +20,7 @@ provenance, nothing else.
 from __future__ import annotations
 
 import html as html_lib
+import os
 from datetime import date
 
 from .config import BRAND, SECTION_NAMES
@@ -30,17 +31,28 @@ from .keywords import reader_keywords
 from .models import Item, is_chinese
 from .report import WEEKDAY_ZH, coverage_window
 
+#: Every font size in the article is written as ``px(n)``, so a global
+#: adjustment is one number instead of twenty scattered literals. The step is
+#: applied to the design's own sizes; 9px is the floor, below which WeChat's
+#: own rendering stops being legible on a phone.
+FONT_STEP = int(os.environ.get("LIVER_INTEL_FONT_STEP", "-2"))
+
+
+def px(base: int) -> int:
+    return max(base + FONT_STEP, 9)
+
+
 INK = "#1a1a1a"
 MUTED = "#8a8a8a"
 RULE = "#e6e6e6"
 ACCENT = "#9c2b2b"
 LINK = "#576b95"          # WeChat's own link colour
-WRAP = ("max-width:677px;margin:0 auto;padding:0 2px;color:%s;"
-        "font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB',"
-        "'Microsoft YaHei',sans-serif;font-size:16px;line-height:1.75;"
-        "letter-spacing:.02em;word-break:break-word;" % INK)
-P = "margin:0 0 18px;font-size:16px;line-height:1.8;color:%s;" % INK
-SMALL = "margin:0 0 10px;font-size:13px;line-height:1.7;color:%s;" % MUTED
+WRAP = (f"max-width:677px;margin:0 auto;padding:0 2px;color:{INK};"
+        f"font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB',"
+        f"'Microsoft YaHei',sans-serif;font-size:{px(16)}px;line-height:1.75;"
+        f"letter-spacing:.02em;word-break:break-word;")
+P = f"margin:0 0 18px;font-size:{px(16)}px;line-height:1.8;color:{INK};"
+SMALL = f"margin:0 0 10px;font-size:{px(13)}px;line-height:1.7;color:{MUTED};"
 
 
 def normalise(text: str) -> str:
@@ -53,13 +65,13 @@ def esc(text: str) -> str:
 
 def _section(title: str, count: int | None = None) -> str:
     counter = ("" if count is None else
-               f'<span style="margin-left:9px;font-size:13px;color:{MUTED};">{count} 条</span>')
+               f'<span style="margin-left:9px;font-size:{px(13)}px;color:{MUTED};">{count} 条</span>')
     return (
         f'<section style="margin:38px 0 18px;">'
         f'<div style="display:flex;align-items:center;">'
         f'<span style="display:inline-block;width:4px;height:19px;background:{ACCENT};'
         f'margin-right:9px;"></span>'
-        f'<span style="font-size:19px;font-weight:700;color:{INK};'
+        f'<span style="font-size:{px(19)}px;font-weight:700;color:{INK};'
         f'letter-spacing:.04em;">{esc(title)}</span>'
         f'{counter}'
         f'</div>'
@@ -73,13 +85,13 @@ def _entry_title(index: int, text: str, rendering: str = "") -> str:
     Original first, rendering after -- the same order as every quote. A
     Chinese title gets nothing added.
     """
-    out = (f'<h2 style="margin:26px 0 8px;font-size:18px;line-height:1.55;'
+    out = (f'<h2 style="margin:26px 0 8px;font-size:{px(18)}px;line-height:1.55;'
            f'font-weight:700;color:{INK};">'
            f'<span style="color:{ACCENT};">{index:02d}</span>&nbsp;&nbsp;{esc(text)}</h2>')
     if rendering and not is_chinese(text):
-        out += (f'<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:{INK};">'
+        out += (f'<p style="margin:0 0 12px;font-size:{px(15)}px;line-height:1.6;color:{INK};">'
                 f'{esc(rendering)}'
-                f'<span style="font-size:12px;color:{MUTED};">　编者译，仅供参考</span></p>')
+                f'<span style="font-size:{px(12)}px;color:{MUTED};">　编者译，仅供参考</span></p>')
     return out
 
 
@@ -89,22 +101,22 @@ def _keywords(item: Item, dm: DomainMap) -> str:
         return ""
     chips = "".join(
         f'<span style="display:inline-block;margin:0 6px 6px 0;padding:2px 9px;'
-        f'border:1px solid {RULE};border-radius:2px;font-size:12px;color:{MUTED};'
+        f'border:1px solid {RULE};border-radius:2px;font-size:{px(12)}px;color:{MUTED};'
         f'">{esc(tag)}</span>' for tag in tags)
     return f'<p style="margin:0 0 14px;line-height:2;">{chips}</p>'
 
 
 def _quote(text: str, translation: str = "") -> str:
     block = (f'<blockquote style="margin:0 0 14px;padding:12px 16px;'
-             f'border-left:3px solid {ACCENT};background:#faf7f7;font-size:15px;'
+             f'border-left:3px solid {ACCENT};background:#faf7f7;font-size:{px(15)}px;'
              f'line-height:1.8;color:{INK};">{esc(text)}')
     # Chinese sources are shown as written; only a foreign-language quote gets a
     # rendering, and it is labelled so no one mistakes it for the source text.
     if translation and not is_chinese(text):
         block += (f'<div style="margin-top:10px;padding-top:10px;'
-                  f'border-top:1px dashed {RULE};color:{INK};font-size:14px;">'
+                  f'border-top:1px dashed {RULE};color:{INK};font-size:{px(14)}px;">'
                   f'{esc(translation)}'
-                  f'<span style="color:{MUTED};font-size:12px;">'
+                  f'<span style="color:{MUTED};font-size:{px(12)}px;">'
                   f'　编者译，仅供参考</span></div>')
     return block + "</blockquote>"
 
@@ -120,7 +132,7 @@ def _figure(item: Item) -> str:
         f'<figure style="margin:0 0 16px;">'
         f'<img src="{esc(src)}" style="width:100%;max-width:677px;height:auto;'
         f'display:block;border-radius:2px;" alt="{esc(caption)}"/>'
-        f'<figcaption style="margin-top:6px;font-size:12px;color:{MUTED};'
+        f'<figcaption style="margin-top:6px;font-size:{px(12)}px;color:{MUTED};'
         f'text-align:center;">{esc(caption)}</figcaption></figure>')
 
 
@@ -167,10 +179,10 @@ def _field_value(quote) -> str:
 
 def _source_line(item: Item) -> str:
     """Provenance directly under the entry: publisher, date, clickable original."""
-    return (f'<p style="margin:0 0 6px;font-size:13px;line-height:1.7;color:{MUTED};">'
+    return (f'<p style="margin:0 0 6px;font-size:{px(13)}px;line-height:1.7;color:{MUTED};">'
             f'出处：{esc(provenance(item))}　'
             f'<a href="{esc(item.url)}" style="color:{LINK};">查看原文 ↗</a></p>'
-            f'<p style="margin:0 0 22px;font-size:12px;line-height:1.6;color:{MUTED};'
+            f'<p style="margin:0 0 22px;font-size:{px(12)}px;line-height:1.6;color:{MUTED};'
             f'word-break:break-all;">'
             f'<a href="{esc(item.url)}" style="color:{LINK};">{esc(item.url)}</a></p>')
 
@@ -236,9 +248,9 @@ def _conference_block(report_date: str, calendar: Calendar | None = None) -> str
         if conference.location_zh:
             place += f"　{conference.location_zh}"
         out.append(
-            f'<p style="margin:0 0 6px;font-size:16px;font-weight:600;color:{INK};">'
+            f'<p style="margin:0 0 6px;font-size:{px(16)}px;font-weight:600;color:{INK};">'
             f'{esc(conference.name)}'
-            f'<span style="margin-left:8px;font-size:12px;font-weight:400;color:{ACCENT};">'
+            f'<span style="margin-left:8px;font-size:{px(12)}px;font-weight:400;color:{ACCENT};">'
             f'{esc(when)}</span></p>')
         out.append(f'<p style="{SMALL}">会期 {esc(conference.start)} 至 '
                    f'{esc(conference.end)}{esc(place)}</p>')
@@ -253,11 +265,11 @@ def _conference_block(report_date: str, calendar: Calendar | None = None) -> str
                 f'<td style="padding:3px 0;color:{INK if m.date >= report_date else MUTED};">'
                 f'{esc(m.date)}{"" if m.date >= report_date else "　已过"}</td>'
                 f'</tr>' for m in milestones)
-            out.append(f'<table style="border-collapse:collapse;font-size:13px;'
+            out.append(f'<table style="border-collapse:collapse;font-size:{px(13)}px;'
                        f'line-height:1.7;margin:2px 0 16px;">{rows}</table>')
     if stcs:
         # Single-topic conferences: one line each, dates and place, nothing more.
-        out.append(f'<p style="margin:18px 0 6px;font-size:14px;font-weight:600;'
+        out.append(f'<p style="margin:18px 0 6px;font-size:{px(14)}px;font-weight:600;'
                    f'color:{INK};">APASL 专题会（STC）</p>')
         rows = "".join(
             f'<tr>'
@@ -269,7 +281,7 @@ def _conference_block(report_date: str, calendar: Calendar | None = None) -> str
             f'{esc(c.location)}'
             f'{"　" + esc(c.location_zh) if c.location_zh else ""}</td>'
             f'</tr>' for c, _ in stcs)
-        out.append(f'<table style="border-collapse:collapse;font-size:13px;'
+        out.append(f'<table style="border-collapse:collapse;font-size:{px(13)}px;'
                    f'line-height:1.7;margin:0 0 16px;">{rows}</table>')
     return "".join(out)
 
@@ -288,10 +300,10 @@ def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
     if watermark:
         out.append(
             f'<div style="margin:0 0 20px;padding:12px 14px;border:2px solid {ACCENT};'
-            f'border-radius:2px;background:#fff5f5;font-size:14px;line-height:1.7;'
+            f'border-radius:2px;background:#fff5f5;font-size:{px(14)}px;line-height:1.7;'
             f'color:{ACCENT};font-weight:700;">{esc(watermark)}</div>')
 
-    out.append(f'<h1 style="margin:0 0 6px;font-size:22px;line-height:1.45;'
+    out.append(f'<h1 style="margin:0 0 6px;font-size:{px(22)}px;line-height:1.45;'
                f'font-weight:700;color:{INK};">{esc(brand)}｜{esc(report_date)}'
                f'（{esc(weekday)}）</h1>')
     out.append(f'<p style="{SMALL}">覆盖 {esc(coverage)}　·　本期 {len(items)} 条</p>')

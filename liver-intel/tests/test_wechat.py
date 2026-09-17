@@ -291,3 +291,28 @@ def test_stcs_render_as_a_compact_list_under_the_annual_meetings(domain_map):
     assert "Almaty, Kazakhstan　哈萨克斯坦 阿拉木图" in block
     assert block.index("Annual X") < block.index("APASL 专题会（STC）") < block.index("STC Almaty")
     assert "2 条" in block
+
+
+# --- type scale ------------------------------------------------------------
+def test_every_size_goes_through_the_one_scale(domain_map):
+    """A global size change is one number, not twenty scattered literals."""
+    import re
+    from liver_intel import report_wechat
+    source = (report_wechat.__file__).replace(".pyc", ".py")
+    literals = re.findall(r"font-size:(\d+)px", open(source, encoding="utf-8").read())
+    assert literals == [], f"font sizes bypassing px(): {literals}"
+
+
+def test_the_step_shrinks_the_rendered_article(domain_map, monkeypatch):
+    from liver_intel import report_wechat
+    assert report_wechat.px(16) == 14 and report_wechat.px(22) == 20
+    # 9px is the floor: below it WeChat's own rendering stops being legible.
+    monkeypatch.setattr(report_wechat, "FONT_STEP", -20)
+    assert report_wechat.px(12) == 9
+
+
+def test_no_rendered_size_is_smaller_than_the_floor(domain_map):
+    import re
+    article = wechat_html([make()], "2026-09-14", domain_map)
+    sizes = [int(n) for n in re.findall(r"font-size:(\d+)px", article)]
+    assert sizes and min(sizes) >= 9 and max(sizes) <= 20

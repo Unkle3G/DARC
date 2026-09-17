@@ -54,7 +54,9 @@ shipped, and you fill it in. No external model, no key.
    rejected that should not be.
 
 5. Hand over all three: `out/liver_daily_<date>_mdnice.md` (paste into
-   MDNice — turn on 「微信外链转脚注」 so the source links survive),
+   MDNice — turn on 「微信外链转脚注」 so the source links survive, and use the
+   repo's own theme, `liver-intel/assets/mdnice-theme.css`, in MDNice's
+   「自定义」 CSS box),
    `out/liver_daily_<date>_wechat.html` (paste straight into the WeChat editor
    if not using MDNice) and `out/liver_daily_<date>.md` (internal). Point out
    anything in 运行提示 the operator has to act on. Do not publish the article

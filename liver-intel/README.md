@@ -182,6 +182,13 @@ Nothing from this table is ever rendered into an article.
   and links stay ordinary Markdown links — turn on MDNice's 「微信外链转脚注」 and
   every 查看原文 becomes a numbered footnote, which is what WeChat allows.
 
+Type size lives in one place per path. In the HTML renderer every size is
+written `px(n)`, and `FONT_STEP` (env `LIVER_INTEL_FONT_STEP`, default `-2`)
+shifts the whole scale at once, with a 9px floor. Markdown carries no sizes at
+all, so the MDNice side is the theme's job: `assets/mdnice-theme.css` is the
+matching custom theme (same scale, same accent), pasted into MDNice's
+「自定义」 CSS box.
+
 The no-commentary rule still applies. The layout gives the material more room —
 section headers, figures, pull quotes — but adds no interpretation: the prose is
 limited to counts, scope and provenance, and everything substantive is either an
