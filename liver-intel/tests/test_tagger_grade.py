@@ -347,3 +347,38 @@ def test_a_results_sentence_is_not_cut_at_an_abbreviation():
     # Other abbreviations that show up mid-sentence in methods prose.
     assert len(_split_sentences("Tumours were graded per Fig. 3 and WHO criteria.")) == 1
     assert len(_split_sentences("Dosing followed Smith et al. and was weight-based.")) == 1
+
+
+def test_naming_liver_injury_is_not_observing_it(tagger):
+    """Widening the literature window put three of these at P1 in one run.
+
+    All three came from the bare word "hepatotoxicity": a birch-bark paper whose
+    method was "a CCl4-induced model of hepatotoxicity", a paper "proposing a
+    biphasic model", and a statin paper describing "a now-discredited fear" of
+    it. None observed liver injury in anyone.
+    """
+    def fired(text, tag):
+        return any(tag in s.tags for s in tagger.sentence_tags(text))
+
+    assert not fired("In vivo, hepatoprotective potential was assessed in a "
+                     "CCl4-induced model of hepatotoxicity.", "DILI_SIGNAL")
+    assert not fired("We propose a biphasic model of ALI hepatotoxicity.", "DILI_SIGNAL")
+    assert not fired("MASLD is untreated in about half of eligible patients owing to "
+                     "a now-discredited fear of hepatotoxicity.", "DILI_SIGNAL")
+    # The real thing still fires -- including DILI, whose own name carries the
+    # word "induced", so that word must not be a veto.
+    assert fired("Two patients developed drug-induced liver injury with ALT "
+                 "elevation above 5x ULN.", "DILI_SIGNAL")
+    assert fired("Grade 3 hepatotoxicity occurred in 8 of 120 patients.", "DILI_SIGNAL")
+
+
+def test_citing_a_guideline_is_not_issuing_one(tagger):
+    """"according to the EASL Clinical Practice Guidelines" in a Background
+    sentence lifted a retrospective cohort study to P1."""
+    def fired(text):
+        return any("GUIDELINE" in s.tags for s in tagger.sentence_tags(text))
+
+    assert not fired("According to the EASL Clinical Practice Guidelines on chronic "
+                     "hepatitis B, steatosis was defined as CAP >= 248 dB/m.")
+    assert not fired("Fibrosis was staged based on the AASLD practice guidance.")
+    assert fired("EASL today published its updated clinical practice guideline on MASLD.")

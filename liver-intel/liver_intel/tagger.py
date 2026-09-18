@@ -127,6 +127,31 @@ WITHDRAWAL_CONTEXT = re.compile(
     r"(?i)\b(?:withdraw\w*|discontinu\w*|terminat\w*|rescind\w*|revoke\w*)\b"
     r"|撤回|撤销|终止")
 
+#: A sentence that *names* liver injury as an experimental system, a hypothesis
+#: or a received idea is not a safety finding. Three P1 items in one run came
+#: from the bare word "hepatotoxicity": a birch-bark paper whose method was "a
+#: CCl4-induced model of hepatotoxicity", a paper "proposing a biphasic model of
+#: ALI hepatotoxicity", and a statin paper describing "a now-discredited fear of
+#: hepatotoxicity". None of them observed liver injury in anyone.
+MENTION_CONTEXT = re.compile(
+    # "induced" is deliberately absent: drug-INDUCED liver injury is the real
+    # signal's own name, and vetoing on it silenced "Two patients developed
+    # drug-induced liver injury". The experimental sense always travels with
+    # "model" anyway ("a CCl4-induced model of hepatotoxicity").
+    r"(?i)\b(?:model|models|modell?ing|assay|in vitro|in vivo|"
+    r"we propose|proposed|hypothes\w+|potential|fear of|concern(?:s)? (?:about|over)|"
+    r"risk of|screen(?:ing|ed)? for|to (?:assess|evaluate|investigate|study))\b"
+    r"|模型|体外|体内|拟|假说")
+
+#: Citing a society's guideline is not issuing one. "according to the EASL
+#: Clinical Practice Guidelines" in a paper's Background lifted a retrospective
+#: cohort study to P1.
+CITATION_CONTEXT = re.compile(
+    r"(?i)\b(?:according to|as recommended|as defined|as per|per the|based on|"
+    r"in line with|consistent with|in accordance with|following the|"
+    r"defined (?:by|according))\b"
+    r"|根据|依据|参照|按照")
+
 #: Phrases that show up in drug naming; used to lift a compound name out of a
 #: headline when the release does not carry structured metadata.
 #: A space-separated code needs three digits ("MK 3475"); two letters and two
@@ -316,6 +341,10 @@ class Tagger:
             tags = {tag for tag, pattern in self._study if pattern.search(sentence)}
             if "SUBMISSION" in tags and WITHDRAWAL_CONTEXT.search(sentence):
                 tags.discard("SUBMISSION")
+            if MENTION_CONTEXT.search(sentence):
+                tags -= {"DILI_SIGNAL", "SAFETY_SIGNAL"}
+            if "GUIDELINE" in tags and CITATION_CONTEXT.search(sentence):
+                tags.discard("GUIDELINE")
             if tags:
                 out.append(SentenceTags(sentence, tags,
                                         bool(FUTURE_TENSE.search(sentence))))
