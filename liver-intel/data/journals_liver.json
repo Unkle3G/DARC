@@ -1,5 +1,5 @@
 {
-  "note": "期刊分层名册。匹配用 PubMed esummary 的 fulljournalname（每个都已通过 PubMed API 核对，不是凭记忆写的），大小写不敏感，按前缀匹配以容纳 'Hepatology (Baltimore, Md.)' 这类括号后缀。A 层为操作者点名的五本及其同级；B 层为我提议的一档之下的领域主力刊，operator_confirmed=false 表示待确认，可直接增删。名册只决定分级权重，不决定是否采集：不在名册上的期刊照常采集，只是进不了日报。",
+  "note": "期刊分层名册。匹配用 PubMed esummary 的 fulljournalname（每个都已通过 PubMed API 核对，不是凭记忆写的），大小写不敏感；名称先在第一个括号/冒号/分号处截断（'Hepatology (Baltimore, Md.)' → 'Hepatology'），再**精确**匹配，不做前缀匹配——前缀匹配会把 'Nature structural & molecular biology' 并进 'Nature' 那一层。name 和 abbrev 两个字段都会建索引。A 层为操作者点名的五本及其同级；B 层为我提议的一档之下的领域主力刊，operator_confirmed=false 表示待确认，可直接增删。名册只决定分级权重，不决定是否采集：不在名册上的期刊照常采集，只是进不了日报。",
   "operator_confirmed": false,
   "tiers": {
     "A": {
