@@ -56,3 +56,8 @@ echo "       sudo pmset repeat wakeorpoweron MTWRF 06:25:00"
 echo "  2. 运行完成后引擎只写出文章，不翻译。译文要么来自 ANTHROPIC_API_KEY，"
 echo "     要么由 Claude 会话填工作单后跑 \`liver-intel render --date <日期>\`。"
 echo "     没有译文的稿子顶部会写 MODEL STEP DID NOT RUN，别当成完整成稿发出去。"
+echo
+echo "发布用这个文件："
+echo "  $STATE/out/liver_daily_<日期>_wechat.html"
+echo "  浏览器打开 → 全选 → 复制 → 粘进公众号编辑器。样式全是内联的，"
+echo "  不需要 MDNice，也不需要装主题。"

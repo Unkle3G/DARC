@@ -211,13 +211,16 @@ Nothing from this table is ever rendered into an article.
 
 ## 公众号 output
 
-`daily --wechat` writes the reader-facing article in two forms:
+`daily --wechat` writes the reader-facing article in two forms. **The HTML is
+the publishing path** (the operator's choice): it needs no third-party editor
+and no theme to install.
 
 * `out/liver_daily_<date>_wechat.html` — styled inline (the WeChat editor strips
-  `<style>` and `<link>`), sized for the ~677px column, pasteable straight into
-  the editor;
-* `out/liver_daily_<date>_mdnice.md` — the same article as **plain Markdown for
-  MDNice (墨滴)**, where the theme does the styling. It carries no HTML at all:
+  `<style>` and `<link>`), sized for the ~677px column, `charset` declared so it
+  opens correctly from disk. Open it in a browser, select all, copy, paste into
+  the WeChat editor;
+* `out/liver_daily_<date>_mdnice.md` — a fallback: the same article as **plain
+  Markdown for MDNice (墨滴)**, where the theme does the styling. It carries no HTML at all:
   inline styles would survive MDNice and clash with the theme. Keywords are
   code spans (what MDNice's themes render as chips), the calendar is a table,
   and links stay ordinary Markdown links — turn on MDNice's 「微信外链转脚注」 and
