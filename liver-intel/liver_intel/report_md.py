@@ -80,7 +80,12 @@ def _figure(item: Item) -> list[str]:
 
 
 def _record(item: Item, fields: list) -> list[str]:
-    """A record's published field values, on one line -- registry or journal."""
+    """A record's published field values -- registry or journal.
+
+    One fact per line. Six fields joined by interpuncts wrapped into a grey
+    slab that no one could scan; a list gives each value its own line and its
+    own left edge.
+    """
     cells = [f"**{esc(label)}**：{esc(value)}" for label, value in journal_record(item)]
     if item.meta.get("sponsor"):
         cells.append(f"**leadSponsor**：{esc(str(item.meta['sponsor']))}")
@@ -90,7 +95,7 @@ def _record(item: Item, fields: list) -> list[str]:
         if quote.translation and not is_chinese(quote.text):
             value += f"｜{esc(quote.translation)}"
         cells.append(f"**{label}**：{value}")
-    return ["　·　".join(cells), ""] if cells else []
+    return [f"- {cell}" for cell in cells] + [""] if cells else []
 
 
 def _quote(quote) -> list[str]:
@@ -194,6 +199,10 @@ def wechat_markdown(items: list[Item], report_date: str, dm: DomainMap,
             continue
         out += [f"## {section_names.get(priority, priority)}", ""]
         for item in bucket:
+            if index:
+                # A rule between entries: without one the next entry's heading
+                # runs straight on from the previous entry's provenance line.
+                out += ["---", ""]
             index += 1
             out += render_entry(item, dm, index)
 

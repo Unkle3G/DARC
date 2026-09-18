@@ -86,7 +86,7 @@ def test_chinese_quote_is_never_translated(domain_map):
     assert "met the primary endpoint" not in md
 
 
-def test_registry_record_is_one_line_opening_with_the_sponsor(domain_map):
+def test_registry_record_is_one_fact_per_line_opening_with_the_sponsor(domain_map):
     item = make()
     item.src = "ctgov"
     item.meta["sponsor"] = "Roswell Park Cancer Institute"
@@ -96,9 +96,13 @@ def test_registry_record_is_one_line_opening_with_the_sponsor(domain_map):
         Quote(text="awaiting agreement with Sponsor",
               locator="ClinicalTrials.gov · whyStopped", translation="等待与申办方达成协议")]
     md = wechat_markdown([item], "2026-09-14", domain_map)
-    record = next(l for l in md.splitlines() if "leadSponsor" in l)
-    assert record.startswith("**leadSponsor**：Roswell Park Cancer Institute")
-    assert "**overallStatus**：SUSPENDED｜已暂停" in record
+    lines = md.splitlines()
+    record = [l for l in lines if l.startswith("- **")]
+    # One fact per line, the sponsor first: six fields joined by interpuncts
+    # wrapped into a slab no one could scan.
+    assert record[0] == "- **leadSponsor**：Roswell Park Cancer Institute"
+    assert "- **overallStatus**：SUSPENDED｜已暂停" in record
+    assert "- **whyStopped**：awaiting agreement with Sponsor｜等待与申办方达成协议" in record
     assert "> SUSPENDED" not in md          # a field is not a pull quote
 
 
@@ -174,3 +178,19 @@ def test_a_journal_entry_carries_its_own_record_line():
                 meta={"src_kind": "journal", "authors": ["Solo A"],
                       "publication_types": [], "doi": ""})
     assert journal_record(solo) == [("作者", "Solo A")]
+
+
+def test_a_rule_separates_consecutive_entries(domain_map):
+    """Without one the next entry's heading runs on from the last source line."""
+    items = [make("P0", title="first"), make("P0", title="second"),
+             make("P1", title="third")]
+    md = wechat_markdown(items, "2026-09-14", domain_map)
+    lines = md.splitlines()
+    first = lines.index("### 01 first")
+    second = lines.index("### 02 second")
+    third = lines.index("### 03 third")
+    assert "---" in lines[first:second]
+    # The rule also carries across a section break.
+    assert "---" in lines[second:third]
+    # But nothing above the very first entry: the section heading is there.
+    assert "---" not in lines[:first]

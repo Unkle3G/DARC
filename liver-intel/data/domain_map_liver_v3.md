@@ -110,7 +110,7 @@
    "gate_en": ["liver", "hepat", "cirrho", "steato", "mash", "nash", "masld", "fibrosis"],
    "gate_zh": ["肝"]},
 
-  {"id": "L15", "tier": "aux", "name_zh": "肠肝轴与微生态", "name_en": "Gut-liver axis & microbiome",
+  {"id": "L15", "tier": "aux", "name_zh": "肠-肝轴与肠道菌群", "name_en": "Gut-liver axis & microbiome",
    "terms_en": ["gut-liver axis", "gut-liver", "fxr agonist", "bile acid receptor",
                 "bile acid signal", "bile acid pool", "bile acid sequestrant"],
    "terms_zh": ["肠肝轴", "肠-肝轴", "胆汁酸受体", "胆汁酸信号"],

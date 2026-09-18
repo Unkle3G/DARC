@@ -53,6 +53,12 @@ WRAP = (f"max-width:677px;margin:0 auto;padding:0 2px;color:{INK};"
         f"letter-spacing:.02em;word-break:break-word;")
 P = f"margin:0 0 18px;font-size:{px(16)}px;line-height:1.8;color:{INK};"
 SMALL = f"margin:0 0 10px;font-size:{px(13)}px;line-height:1.7;color:{MUTED};"
+#: The record block: one fact per line, set tighter than body copy. Six fields
+#: joined by interpuncts wrapped into a grey slab no one could scan.
+RECORD = f"margin:0 0 4px;font-size:{px(13)}px;line-height:1.45;color:{MUTED};"
+#: Between entries, so the next heading does not run on from the last
+#: provenance line.
+ENTRY_RULE = f'<div style="height:1px;background:{RULE};margin:28px 0 0;"></div>' 
 
 
 def normalise(text: str) -> str:
@@ -210,8 +216,9 @@ def _source_line(item: Item) -> str:
             f'<a href="{esc(item.url)}" style="color:{LINK};">{esc(item.url)}</a></p>')
 
 
-def render_entry(item: Item, dm: DomainMap, index: int) -> str:
-    parts = [_entry_title(index, item.title, str(item.meta.get("title_zh") or "")),
+def render_entry(item: Item, dm: DomainMap, index: int, rule: bool = False) -> str:
+    parts = [ENTRY_RULE if rule else "",
+             _entry_title(index, item.title, str(item.meta.get("title_zh") or "")),
              _figure(item), _keywords(item, dm)]
     fields = [q for q in item.evidence.quotes if q.locator.startswith("ClinicalTrials.gov")]
     # The headline is already on the page; quoting it back as a pull quote
@@ -219,10 +226,10 @@ def render_entry(item: Item, dm: DomainMap, index: int) -> str:
     prose = [q for q in item.evidence.quotes
              if q not in fields and normalise(q.text) != normalise(item.title)]
     # A registry states its facts in fields. Three one-word pull quotes read
-    # as noise; the same values on one line read as a record. The lead
-    # sponsor opens the record: "awaiting agreement with Sponsor" means
-    # nothing until the sponsor is named. A paper's catalogue facts go on the
-    # same line, so a journal entry is not the bare one next to a registry one.
+    # as noise; the same values as a record read as a record. The lead sponsor
+    # opens it: "awaiting agreement with Sponsor" means nothing until the
+    # sponsor is named. A paper's catalogue facts go in the same block, so a
+    # journal entry is not the bare one next to a registry one.
     cells = [f'{esc(label)}：<span style="color:{INK};">{esc(value)}</span>'
              for label, value in journal_record(item)]
     if fields:
@@ -232,7 +239,9 @@ def render_entry(item: Item, dm: DomainMap, index: int) -> str:
         cells += [f'{esc(q.locator.split("·")[-1].strip())}：{_field_value(q)}'
                   for q in fields[:6]]
     if cells:
-        parts.append(f'<p style="{SMALL}">' + "　·　".join(cells) + "</p>")
+        parts.append(f'<div style="margin:0 0 14px;">'
+                     + "".join(f'<p style="{RECORD}">{cell}</p>' for cell in cells)
+                     + "</div>")
     for quote in prose[:4]:
         parts.append(_quote(quote.text.strip(), quote.translation))
     if not item.evidence.quotes:
@@ -346,8 +355,8 @@ def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
             continue
         out.append(_section(section_names.get(priority, priority), len(bucket)))
         for item in bucket:
+            out.append(render_entry(item, dm, index + 1, rule=bool(index)))
             index += 1
-            out.append(render_entry(item, dm, index))
 
     out.append(_conference_block(report_date))
 

@@ -33,6 +33,16 @@ QUERY_TERMS = (
 #: servers are excluded upstream by models.EXCLUDED_HOST_SUBSTRINGS.
 DEFAULT_DAYS = 3
 
+#: How many records the window may yield in total, and how many ids go into one
+#: esummary/efetch call. The query returned 241 hits over a three-day window
+#: against a retmax of 50, so four of every five papers were dropped -- and
+#: because esearch sorts by index date, *which* fifth survived depended on the
+#: minute the run fired. A paper present in one run was gone from the next an
+#: hour later. The window is paged through instead; the cap only guards against
+#: a query that has gone wrong.
+MAX_IDS = 600
+BATCH = 150
+
 
 #: PubMed publication types that announce a change to the record rather than a
 #: finding. They carry a title and an abstract like any article, so nothing
@@ -48,7 +58,7 @@ class PubmedSource(BaseSource):
     task = "T4"
     src_kind = "journal"
 
-    def __init__(self, terms: Iterable[str] = QUERY_TERMS, retmax: int = 50):
+    def __init__(self, terms: Iterable[str] = QUERY_TERMS, retmax: int = MAX_IDS):
         self.terms = tuple(terms)
         self.retmax = retmax
 
@@ -58,40 +68,75 @@ class PubmedSource(BaseSource):
             ctx.note(f"[{self.id}] {FEED_ID} is not verified -- literature skipped.")
             return []
 
-        query = " OR ".join(self.terms)
-        search_url = f"{ESEARCH}?{urlencode({'db': 'pubmed', 'term': query, 'retmode': 'json', 'retmax': str(self.retmax), 'sort': 'date', 'datetype': 'edat', 'reldate': str(DEFAULT_DAYS)})}"
-        try:
-            response = ctx.fetcher.get(search_url, allow_304=False)
-        except Exception as exc:
-            ctx.note(f"[{self.id}] esearch failed: {exc}")
-            return []
-        if not response.ok:
-            ctx.note(f"[{self.id}] esearch HTTP {response.status}")
-            return []
-        try:
-            ids = response.json().get("esearchresult", {}).get("idlist", []) or []
-        except json.JSONDecodeError:
-            return []
+        ids, total = self._search(ctx)
         if not ids:
             return []
+        if total > len(ids):
+            ctx.note(f"[{self.id}] window holds {total} records; took {len(ids)} "
+                     f"(cap {self.retmax}) -- raise MAX_IDS or narrow the query")
 
-        summary_url = f"{feed.url}?{urlencode({'db': 'pubmed', 'id': ','.join(ids), 'retmode': 'json'})}"
+        out: list[Item] = []
+        for start in range(0, len(ids), BATCH):
+            batch = ids[start:start + BATCH]
+            payload = self._summaries(ctx, feed.url, batch)
+            if not payload:
+                continue
+            # esummary carries names but no affiliations and no abstract; one
+            # efetch call per batch supplies both.
+            authorship, abstracts = self._efetch(ctx, batch)
+            out.extend(self._items(ctx, payload, authorship, abstracts))
+        return out
+
+    def _search(self, ctx: Context) -> tuple[list[str], int]:
+        """Every id in the window, paged, newest first."""
+        query = " OR ".join(self.terms)
+        ids: list[str] = []
+        total = 0
+        while len(ids) < self.retmax:
+            params = urlencode({
+                "db": "pubmed", "term": query, "retmode": "json",
+                "retstart": str(len(ids)),
+                "retmax": str(min(BATCH, self.retmax - len(ids))),
+                "sort": "date", "datetype": "edat", "reldate": str(DEFAULT_DAYS)})
+            search_url = f"{ESEARCH}?{params}"
+            try:
+                response = ctx.fetcher.get(search_url, allow_304=False)
+            except Exception as exc:
+                ctx.note(f"[{self.id}] esearch failed: {exc}")
+                break
+            if not response.ok:
+                ctx.note(f"[{self.id}] esearch HTTP {response.status}")
+                break
+            try:
+                result = response.json().get("esearchresult", {})
+            except json.JSONDecodeError:
+                break
+            total = int(result.get("count") or 0)
+            page = result.get("idlist") or []
+            if not page:
+                break
+            ids.extend(page)
+            if len(ids) >= total:
+                break
+        return ids, total
+
+    def _summaries(self, ctx: Context, url: str, ids: list[str]) -> dict[str, Any]:
+        summary_url = f"{url}?{urlencode({'db': 'pubmed', 'id': ','.join(ids), 'retmode': 'json'})}"
         try:
             summary = ctx.fetcher.get(summary_url, allow_304=False)
         except Exception as exc:
             ctx.note(f"[{self.id}] esummary failed: {exc}")
-            return []
+            return {}
         if not summary.ok:
-            return []
+            return {}
         try:
-            payload = summary.json().get("result", {})
+            return summary.json().get("result", {})
         except json.JSONDecodeError:
-            return []
+            return {}
 
-        # esummary carries names but no affiliations and no abstract; one
-        # efetch call supplies both.
-        authorship, abstracts = self._efetch(ctx, ids)
-
+    def _items(self, ctx: Context, payload: dict[str, Any],
+               authorship: dict[str, list[dict[str, Any]]],
+               abstracts: dict[str, str]) -> list[Item]:
         out: list[Item] = []
         for pmid in payload.get("uids", []) or []:
             record = payload.get(pmid) or {}

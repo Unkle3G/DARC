@@ -329,3 +329,25 @@ def test_no_rendered_size_is_smaller_than_the_floor(domain_map):
     article = wechat_html([make()], "2026-09-14", domain_map)
     sizes = [int(n) for n in re.findall(r"font-size:(\d+)px", article)]
     assert sizes and min(sizes) >= 9 and max(sizes) <= 20
+
+
+def test_the_record_block_is_one_fact_per_line_and_entries_are_ruled(domain_map):
+    """Six fields joined by interpuncts wrapped into a slab no one could scan."""
+    from liver_intel.report_wechat import ENTRY_RULE, RECORD
+
+    first = make("P0", title="first")
+    first.src = "ctgov"
+    first.meta["sponsor"] = "Roswell Park Cancer Institute"
+    first.evidence.quotes = [
+        Quote(text="SUSPENDED", locator="ClinicalTrials.gov · overallStatus",
+              translation="已暂停"),
+        Quote(text="PHASE1", locator="ClinicalTrials.gov · phases")]
+    second = make("P1", title="second")
+    html = wechat_html([first, second], "2026-09-14", domain_map)
+
+    assert html.count(f'<p style="{RECORD}">') == 3      # sponsor + 2 fields
+    assert f'<p style="{RECORD}">leadSponsor：' in html
+    assert "　·　overallStatus" not in html              # no longer one run-on line
+    # A rule before every entry but the first, across the section break too.
+    assert html.count(ENTRY_RULE) == 1
+    assert html.index(ENTRY_RULE) < html.index("second")

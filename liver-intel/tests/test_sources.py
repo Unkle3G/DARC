@@ -1,3 +1,4 @@
+import re
 import json
 
 from liver_intel.config import Settings
@@ -581,3 +582,45 @@ def test_a_correction_notice_is_not_collected_as_a_paper(store, fake_fetcher, do
     assert source._to_item(ctx, "1", record, "A correction to the original.") is None
     record["pubtype"] = ["Journal Article"]
     assert source._to_item(ctx, "2", record, "A correction to the original.") is not None
+
+
+def test_the_literature_window_is_paged_not_truncated(store, fake_fetcher, domain_map):
+    """241 hits over three days against a retmax of 50 dropped four papers in five.
+
+    Worse, esearch sorts by index date, so *which* fifth survived depended on
+    the minute the run fired: a paper collected in one run was gone from the
+    next an hour later.
+    """
+    from liver_intel.sources import pubmed as pubmed_mod
+
+    seen: list[str] = []
+
+    class Paging:
+        ok, status = True, 200
+        text = "<PubmedArticleSet></PubmedArticleSet>"
+
+        def __init__(self, url):
+            self.url = url
+
+        def json(self):
+            if "esearch" in self.url:
+                start = int(re.search(r"retstart=(\d+)", self.url).group(1))
+                size = int(re.search(r"retmax=(\d+)", self.url).group(1))
+                ids = [str(1000 + i) for i in range(start, min(start + size, 241))]
+                return {"esearchresult": {"count": "241", "idlist": ids}}
+            return {"result": {"uids": []}}
+
+    class Fetcher:
+        def get(self, url, allow_304=True):
+            seen.append(url)
+            return Paging(url)
+
+    source = pubmed_mod.PubmedSource()
+    ctx = context(store, Fetcher(), domain_map,
+                  entries=[Feed(id="pubmed_esummary", source="pubmed",
+                                     url="https://eutils.ncbi.nlm.nih.gov/esummary.fcgi",
+                                     status="verified")])
+    ids, total = source._search(ctx)
+    assert total == 241
+    assert len(ids) == 241            # the whole window, not the first 50
+    assert len(set(ids)) == 241       # and no page repeated
