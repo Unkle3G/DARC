@@ -323,3 +323,27 @@ def test_short_company_alias_does_not_match_a_numbered_gene_symbol():
         assert "GSK" not in [c.name for c in companies], text
     companies, _, _ = tagger.tag_entities("GSK reported Phase 3 hepatitis B data")
     assert "GSK" in [c.name for c in companies]
+
+
+def test_a_results_sentence_is_not_cut_at_an_abbreviation():
+    """A quote is published verbatim, so half a sentence ships as the evidence.
+
+    Results prose is built out of "vs." comparisons; splitting on every full
+    stop cut "reduced injurious falls (4% vs. 12%)" into three fragments.
+    """
+    from liver_intel.tagger import _split_sentences
+
+    text = ("RESULTS: Lactulose reduced injurious falls (4% vs. 12%) and "
+            "non-injurious falls (19% vs. 32%), with no differences in overt HE. "
+            "The trial enrolled 230 adults.")
+    assert _split_sentences(text) == [
+        "RESULTS: Lactulose reduced injurious falls (4% vs. 12%) and "
+        "non-injurious falls (19% vs. 32%), with no differences in overt HE.",
+        "The trial enrolled 230 adults.",
+    ]
+    # A newline still ends a sentence: abstracts are one section per line.
+    assert _split_sentences("BACKGROUND: Falls are common.\nAPPROACH: A 24-week trial.") == [
+        "BACKGROUND: Falls are common.", "APPROACH: A 24-week trial."]
+    # Other abbreviations that show up mid-sentence in methods prose.
+    assert len(_split_sentences("Tumours were graded per Fig. 3 and WHO criteria.")) == 1
+    assert len(_split_sentences("Dosing followed Smith et al. and was weight-based.")) == 1

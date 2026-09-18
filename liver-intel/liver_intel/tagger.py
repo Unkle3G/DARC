@@ -440,9 +440,32 @@ class Tagger:
         return item
 
 
-_SENTENCE_END = re.compile(r"(?<=[.!?\u3002\uff01\uff1f])\s+|\n+")
+#: Abbreviations whose full stop does not end a sentence. Results prose is full
+#: of them -- "reduced injurious falls (4% vs. 12%)" was being cut in half at
+#: "vs.", and a quote is published verbatim, so half a sentence ships as the
+#: evidence for a signal.
+_ABBREVIATIONS = frozenset("""
+vs v.s cf e.g i.e etc al no nos fig figs eq eqs ref refs approx ca est
+vol pp p pt ch sec dr mr mrs ms prof st jr sr inc ltd co corp
+""".split())
+
+#: A newline always ends a sentence (abstracts are section-per-line); a full
+#: stop ends one only when the token in front of it is not an abbreviation.
+_BOUNDARY = re.compile(r"\n+|(?<=[.!?\u3002\uff01\uff1f])[ \t]+")
+_TRAILING_TOKEN = re.compile(r"([A-Za-z][A-Za-z.]*)\.$")
 
 
 def _split_sentences(text: str) -> list[str]:
-    parts = [part.strip() for part in _SENTENCE_END.split(text or "")]
+    text = text or ""
+    parts: list[str] = []
+    start = 0
+    for match in _BOUNDARY.finditer(text):
+        head = text[start:match.start()]
+        if not match.group(0).startswith("\n"):
+            token = _TRAILING_TOKEN.search(head.rstrip())
+            if token and token.group(1).strip(".").lower() in _ABBREVIATIONS:
+                continue
+        parts.append(head.strip())
+        start = match.end()
+    parts.append(text[start:].strip())
     return [part for part in parts if len(part) > 12]
