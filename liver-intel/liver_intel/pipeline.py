@@ -41,6 +41,7 @@ class RunResult:
     wechat_path: Path | None = None
     markdown_path: Path | None = None
     worksheet_path: Path | None = None
+    judgement_path: Path | None = None
 
     @property
     def counts(self) -> dict[str, int]:
@@ -213,6 +214,20 @@ def run_daily(settings: Settings, today: str | None = None, since: str | None = 
                          "Grading is rules-only and nothing is translated.")
             items = enrich(items, ctx, judge)
 
+            if write and isinstance(judge, llm.NullJudge):
+                # No API step ran, so the significance judgement is the
+                # session's to make. It sits before selection -- what it finds
+                # changes the grade, which changes what ships -- so every
+                # candidate is offered, not just what the rules already chose.
+                candidates = [item for item in items if item.lines]
+                (settings.out_dir / f"liver_daily_{today}_candidates.json").write_text(
+                    json.dumps([i.to_json() for i in candidates], ensure_ascii=False,
+                               indent=2) + "\n", encoding="utf-8")
+                result.judgement_path = (settings.out_dir /
+                                         f"liver_daily_{today}_judgement.json")
+                count = worksheet.write_judgement(candidates, result.judgement_path, today)
+                ctx.note(f"判定工作单：{count} 条待判，填好 signals/quotes 后运行 "
+                         f"`liver-intel judge --date {today}`")
             selection = select.select_daily(items, cap=settings.daily_cap)
             for item in selection.daily:
                 if item.date < window_start:
@@ -298,6 +313,48 @@ def _write_outputs(settings: Settings, result: RunResult, dm: DomainMap,
                                              weekly_pool_size=len(result.weekly))
         result.markdown_path = settings.out_dir / f"liver_daily_{today}_mdnice.md"
         result.markdown_path.write_text(markdown, encoding="utf-8")
+
+
+def judge(settings: Settings, today: str, wechat: bool | None = None) -> RunResult:
+    """Apply a filled judgement worksheet: re-grade, re-select, rewrite.
+
+    Nothing is collected again. The candidates are the day's own file, the
+    signals come back through the same three guards the API step applies, and
+    the day's renderings worksheet is rewritten because selection may have
+    changed.
+    """
+    candidates_path = settings.out_dir / f"liver_daily_{today}_candidates.json"
+    sheet = settings.out_dir / f"liver_daily_{today}_judgement.json"
+    if not candidates_path.exists():
+        raise FileNotFoundError(f"no candidates for {today}: {candidates_path}")
+    if not sheet.exists():
+        raise FileNotFoundError(f"no judgement worksheet for {today}: {sheet}")
+    items = [Item.from_json(raw)
+             for raw in json.loads(candidates_path.read_text(encoding="utf-8"))]
+    applied, rejected, reasons = worksheet.apply_judgement(items, sheet)
+
+    dm = load_domain_map()
+    for item in items:
+        grading.apply(item, dm=dm, today=today, extra_signals=item.evidence.signals)
+    selection = select.select_daily(items, cap=settings.daily_cap)
+
+    run_path = settings.out_dir / f"liver_daily_{today}_run.json"
+    run_info = json.loads(run_path.read_text(encoding="utf-8")) if run_path.exists() else {}
+    notes = [n for n in run_info.get("notes", [])
+             if not n.startswith(("renderings", "判定工作单", "MODEL STEP DID NOT RUN"))]
+    notes.append(f"判定来自工作单：{applied} 条信号采纳，{rejected} 条丢弃")
+    notes.extend(reasons)
+    result = RunResult(report_date=today, daily=selection.daily,
+                       weekly=selection.weekly, collected=len(items), notes=notes)
+    _, missing = translate.translate_items(result.daily, translate.NullTranslator())
+    if missing:
+        result.worksheet_path = settings.out_dir / f"liver_daily_{today}_renderings.json"
+        worksheet.write(result.daily, result.worksheet_path, today)
+        result.notes.append(f"译文工作单已按新选集重写：{missing} 处待填，"
+                            f"填好后运行 `liver-intel render --date {today}`")
+    _write_outputs(settings, result, dm,
+                   wechat=bool(run_info.get("wechat")) if wechat is None else wechat)
+    return result
 
 
 def render(settings: Settings, today: str, wechat: bool | None = None) -> RunResult:

@@ -120,3 +120,95 @@ def test_phase_notation_is_never_offered_for_rendering(tmp_path):
     worksheet.write([item], path, "2026-09-14")
     sheet = json.loads(path.read_text(encoding="utf-8"))
     assert all(e["text"] != "PHASE3" for e in sheet["entries"])
+
+
+# --- the judgement worksheet ----------------------------------------------
+def judged(title="Madrigal reports Phase 3 MASH topline", body=None):
+    item = Item(src="newswire", title=title, url="https://www.example.com/a",
+                date="2026-09-14", lines=["L3"], P="P3",
+                meta={"src_kind": "company",
+                      "quotable": body or (title + "\nThe MAESTRO-NASH trial met the "
+                                           "primary endpoint of MASH resolution.")})
+    return item
+
+
+def test_the_judgement_worksheet_offers_the_vocabulary_and_the_source(tmp_path):
+    item = judged()
+    path = tmp_path / "j.json"
+    assert worksheet.write_judgement([item], path, "2026-09-14") == 1
+    sheet = json.loads(path.read_text(encoding="utf-8"))
+    entry = sheet["entries"][0]
+    assert entry["item"] == item.key and entry["signals"] == [] and entry["quotes"] == []
+    assert "met the primary endpoint" in entry["source_text"]
+    assert "PH3_RESULT" in sheet["signals"]           # the closed vocabulary travels
+    assert any("逐字" in rule for rule in sheet["rules"])
+
+
+def test_a_judged_signal_needs_a_verbatim_quote(tmp_path):
+    item = judged()
+    path = tmp_path / "j.json"
+    worksheet.write_judgement([item], path, "2026-09-14")
+    sheet = json.loads(path.read_text(encoding="utf-8"))
+    sheet["entries"][0]["signals"] = ["PH3_RESULT", "REG_APPROVAL"]
+    sheet["entries"][0]["quotes"] = [
+        {"signal": "PH3_RESULT",
+         "text": "The MAESTRO-NASH trial met the primary endpoint of MASH resolution.",
+         "zh": "MAESTRO-NASH 试验达到 MASH 缓解的主要终点。"},
+        {"signal": "REG_APPROVAL", "text": "The FDA approved it.", "zh": "FDA 已批准。"},
+    ]
+    path.write_text(json.dumps(sheet, ensure_ascii=False), encoding="utf-8")
+
+    applied, rejected, reasons = worksheet.apply_judgement([item], path)
+    assert applied == 1 and rejected >= 1
+    assert "PH3_RESULT" in item.evidence.signals
+    assert "REG_APPROVAL" not in item.evidence.signals      # its quote is not in the source
+    assert any("逐字" in r for r in reasons)
+    added = item.evidence.quotes[-1]
+    assert added.locator == "判定:PH3_RESULT"
+    assert added.translation == "MAESTRO-NASH 试验达到 MASH 缓解的主要终点。"
+
+
+def test_a_signal_outside_the_vocabulary_is_dropped(tmp_path):
+    item = judged()
+    path = tmp_path / "j.json"
+    worksheet.write_judgement([item], path, "2026-09-14")
+    sheet = json.loads(path.read_text(encoding="utf-8"))
+    sheet["entries"][0]["quotes"] = [
+        {"signal": "VERY_IMPORTANT",
+         "text": "The MAESTRO-NASH trial met the primary endpoint of MASH resolution."}]
+    path.write_text(json.dumps(sheet, ensure_ascii=False), encoding="utf-8")
+    applied, rejected, reasons = worksheet.apply_judgement([item], path)
+    assert (applied, rejected) == (0, 1) and "词表" in reasons[0]
+
+
+def test_an_unfilled_judgement_worksheet_changes_nothing(tmp_path):
+    item = judged()
+    path = tmp_path / "j.json"
+    worksheet.write_judgement([item], path, "2026-09-14")
+    assert worksheet.apply_judgement([item], path) == (0, 0, [])
+    assert item.evidence.signals == []
+
+
+def test_judge_regrades_and_reselects_the_day(tmp_path, domain_map, monkeypatch):
+    from dataclasses import replace as dc_replace
+    settings = dc_replace(pipeline.Settings(), out_dir=tmp_path,
+                          db_path=tmp_path / "s.sqlite3")
+    item = judged()
+    (tmp_path / "liver_daily_2026-09-14_candidates.json").write_text(
+        json.dumps([item.to_json()], ensure_ascii=False), encoding="utf-8")
+    sheet = tmp_path / "liver_daily_2026-09-14_judgement.json"
+    worksheet.write_judgement([item], sheet, "2026-09-14")
+    filled = json.loads(sheet.read_text(encoding="utf-8"))
+    filled["entries"][0]["signals"] = ["PH3_RESULT"]
+    filled["entries"][0]["quotes"] = [
+        {"signal": "PH3_RESULT",
+         "text": "The MAESTRO-NASH trial met the primary endpoint of MASH resolution.",
+         "zh": "MAESTRO-NASH 试验达到 MASH 缓解的主要终点。"}]
+    sheet.write_text(json.dumps(filled, ensure_ascii=False), encoding="utf-8")
+
+    result = pipeline.judge(settings, "2026-09-14")
+    # the rules had it at P3; the judgement moves it into the day's report
+    assert [i.P for i in result.daily] == ["P0"]
+    assert "PH3_RESULT" in result.daily[0].evidence.signals
+    assert any("判定来自工作单：1 条信号采纳" in n for n in result.notes)
+    assert result.report_path.exists()

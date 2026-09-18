@@ -4,6 +4,7 @@
     liver-intel verify   [--source S]     probe candidates, promote to verified
     liver-intel status                    registry / roster coverage / calendar
     liver-intel daily    [--since D]      collect, grade, write the daily report
+    liver-intel judge --date D            re-grade from the filled judgement worksheet
     liver-intel workday                   does the daily run today? (exit 0 / 1)
     liver-intel weekly                    drain the pool into the Friday digest
     liver-intel backfill --since D        historical sweep (acceptance testing)
@@ -25,7 +26,7 @@ from .domain_map import load as load_domain_map
 from .feeds import Feed, Registry
 from .http import Fetcher
 from .models import today_iso
-from .pipeline import render, run_daily, run_weekly
+from .pipeline import judge as run_judge, render, run_daily, run_weekly
 from .preflight import check as preflight_check, summarise as preflight_summary
 from .store import Store
 from .workdays import verdict as workday_verdict
@@ -133,9 +134,28 @@ def cmd_daily(args: argparse.Namespace) -> int:
         print(f"wrote {result.wechat_path}  (paste into the WeChat editor)")
     if result.markdown_path:
         print(f"wrote {result.markdown_path}  (paste into MDNice)")
+    if result.judgement_path:
+        print(f"wrote {result.judgement_path}  (fill signals/quotes, then: "
+              f"liver-intel judge --date {result.report_date})")
     if result.worksheet_path:
         print(f"wrote {result.worksheet_path}  (fill `zh`, then: liver-intel render "
               f"--date {result.report_date})")
+    return 0
+
+
+def cmd_judge(args: argparse.Namespace) -> int:
+    """Re-grade and re-select a day from its filled judgement worksheet."""
+    settings = _settings(args)
+    result = run_judge(settings, args.date, wechat=True if args.wechat else None)
+    print(f"judged {result.collected} candidate(s); daily {len(result.daily)} "
+          f"{json.dumps(result.counts)}")
+    for note in result.notes:
+        if note.startswith(("判定", "译文")):
+            print(f"  {note}")
+    for path in (result.report_path, result.json_path, result.wechat_path,
+                 result.markdown_path, result.worksheet_path):
+        if path:
+            print(f"wrote {path}")
     return 0
 
 
@@ -361,6 +381,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("workday", help="does the daily run today? exit 0 yes, 1 no")
     p.add_argument("--date")
     p.set_defaults(func=cmd_workday)
+
+    p = sub.add_parser("judge", help="re-grade a day from its filled judgement worksheet")
+    p.add_argument("--date", required=True)
+    p.add_argument("--wechat", action="store_true")
+    p.set_defaults(func=cmd_judge)
 
     p = sub.add_parser("render", help="re-render a day's reports from its filled "
                                        "renderings worksheet")

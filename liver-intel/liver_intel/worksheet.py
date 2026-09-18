@@ -22,6 +22,20 @@ from typing import Any
 from .models import Item, Quote, _normalise_ws
 from .translate import _accept, needs_rendering, quote_needs_rendering
 
+#: What the judgement worksheet asks for. Same contract as the API step in
+#: ``llm.py``: which signals the document *states*, and the sentence that states
+#: each one -- never a conclusion, never outside knowledge.
+JUDGEMENT_RULES = (
+    "你是抽取步骤，不是分析师：只回答「这份文档说了哪些信号」和「哪句话这么说的」。",
+    "signal 只能取 signals 清单里的名字，清单外的一律丢弃。",
+    "每个信号必须配至少一条 quote，quote 的 text 必须逐字出现在该条目的 source_text 中；"
+    "引擎会核对，对不上的整条丢弃。宁可少报，不可编造。",
+    "文档没有明确说出来的信号就不要报。空列表是常见且正确的结果。",
+    "不预测、不评价、不排序，不写「利好」「有望」「值得关注」这类措辞。",
+    "zh 是该 quote 的中文译文；中文原文留空。药名、代号、试验名、公司名、分期写法保持原文。",
+    "不要改动 item、title、source_text 或 rule_signals 字段。",
+)
+
 RULES = (
     "把每个 text 逐字、完整地译成简体中文，填入 zh。",
     "药名、药物代号、化合物名、试验名称、公司名、基因/靶点名、注册号、期刊名一律保持原文写法，"
@@ -56,6 +70,97 @@ def _slots(item: Item) -> list[dict[str, Any]]:
 
 def _source_text(item: Item) -> str:
     return str(item.meta.get("quotable") or item.meta.get("body") or "")
+
+
+def write_judgement(items: list[Item], path: Path, report_date: str,
+                    signals: dict[str, dict] | None = None) -> int:
+    """Hand the session the candidates to judge; return how many.
+
+    This is the significance step of section 0 run by the operator's own Claude
+    session instead of an API call. It sits *before* selection, because what it
+    finds changes the grade, which changes what ships -- so the candidates are
+    everything that matched a disease line, not just what the rules already
+    chose.
+    """
+    from .grade import SIGNALS
+
+    catalogue = {name: str(spec["desc"]) for name, spec in sorted(
+        (signals or SIGNALS).items())}
+    entries = [{
+        "item": item.key,
+        "title": item.title,
+        "src": item.src,
+        "url": item.url,
+        "rule_signals": list(item.evidence.signals),
+        "source_text": _source_text(item)[:SOURCE_EXCERPT_CHARS],
+        "signals": [],
+        "quotes": [],
+    } for item in items]
+    path.write_text(json.dumps(
+        {"date": report_date, "rules": list(JUDGEMENT_RULES), "signals": catalogue,
+         "entries": entries}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return len(entries)
+
+
+def apply_judgement(items: list[Item], path: Path) -> tuple[int, int, list[str]]:
+    """Read a filled judgement worksheet onto the items.
+
+    A signal outside the vocabulary is dropped; a quote that is not verbatim in
+    the item's own source text is dropped; a signal left with no surviving quote
+    is dropped. Those are the same three guards the API step applies -- "命中信号
+    + 原文依据" means a signal without its evidence is not a finding.
+    """
+    from .grade import SIGNALS
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    by_key = {item.key: item for item in items}
+    applied = rejected = 0
+    reasons: list[str] = []
+    for entry in payload.get("entries", []):
+        item = by_key.get(str(entry.get("item", "")))
+        if item is None:
+            continue
+        haystack = _normalise_ws(_source_text(item))
+        quotes_by_signal: dict[str, list[Quote]] = {}
+        for raw in entry.get("quotes") or []:
+            signal = str(raw.get("signal") or "").strip()
+            text = str(raw.get("text") or "").strip()
+            if not text:
+                continue
+            if signal not in SIGNALS:
+                rejected += 1
+                reasons.append(f"{item.key[:8]} 判定：信号 {signal!r} 不在词表内，丢弃")
+                continue
+            if _normalise_ws(text) not in haystack:
+                rejected += 1
+                reasons.append(f"{item.key[:8]} 判定：引文未在原文中逐字出现，丢弃："
+                               f"{text[:50]!r}")
+                continue
+            rendering = _accept(text, str(raw.get("zh") or ""), "judgement rendering") \
+                if needs_rendering(text) else ""
+            quotes_by_signal.setdefault(signal, []).append(
+                Quote(text=text, url=item.url, locator=f"判定:{signal}",
+                      translation=rendering))
+        for signal in entry.get("signals") or []:
+            signal = str(signal).strip()
+            if signal not in SIGNALS:
+                rejected += 1
+                reasons.append(f"{item.key[:8]} 判定：信号 {signal!r} 不在词表内，丢弃")
+                continue
+            if signal not in quotes_by_signal:
+                rejected += 1
+                reasons.append(f"{item.key[:8]} 判定：{signal} 没有可核对的原文依据，丢弃")
+                continue
+        already = {q.text.strip() for q in item.evidence.quotes}
+        for signal, quotes in quotes_by_signal.items():
+            if signal not in item.evidence.signals:
+                item.evidence.signals = sorted(set(item.evidence.signals) | {signal})
+            for quote in quotes:
+                if quote.text.strip() not in already:
+                    item.evidence.quotes.append(quote)
+                    already.add(quote.text.strip())
+            applied += 1
+    return applied, rejected, reasons
 
 
 def write(items: list[Item], path: Path, report_date: str) -> int:
