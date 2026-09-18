@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+
+# Runtime state and generated reports: rebuilt by the engine, never committed.
+data/state.sqlite3
+data/state.sqlite3-journal
+out/

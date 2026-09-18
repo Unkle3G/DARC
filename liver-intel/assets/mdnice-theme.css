@@ -1,0 +1,119 @@
+/* HepaDaily — MDNice 自定义主题（在 MDNice 里选「自定义」，把本文件全文粘进 CSS 框）
+ *
+ * Markdown 本身不带字号，MDNice 的字号由主题决定，所以「全局缩小 2 个字号」在
+ * MDNice 这一侧只能由主题来做：下面每个字号都比常见主题小 2px，与 HTML 版
+ * (liver_intel/report_wechat.py 的 px() 基准) 对齐。
+ *
+ * 只写字号、间距和强调色，不写会被微信编辑器剥掉的东西。
+ */
+
+#nice {
+  font-size: 14px;                 /* 正文：16 − 2 */
+  line-height: 1.75;
+  letter-spacing: .02em;
+  color: #1a1a1a;
+  word-break: break-word;
+}
+
+#nice h1 {
+  font-size: 20px;                 /* 22 − 2 */
+  font-weight: 700;
+  line-height: 1.45;
+  margin: 0 0 6px;
+  color: #1a1a1a;
+}
+
+#nice h2 {                          /* 今日头条 / 前沿速览 / 最新动态 / 会议日历 */
+  font-size: 17px;                 /* 19 − 2 */
+  font-weight: 700;
+  letter-spacing: .04em;
+  margin: 34px 0 14px;
+  padding-left: 9px;
+  border-left: 4px solid #9c2b2b;
+  color: #1a1a1a;
+}
+
+#nice h3 {                          /* 每条的原文标题 */
+  font-size: 16px;                 /* 18 − 2 */
+  font-weight: 700;
+  line-height: 1.55;
+  margin: 24px 0 8px;
+  color: #1a1a1a;
+}
+
+#nice p {
+  font-size: 14px;
+  line-height: 1.8;
+  margin: 0 0 14px;
+}
+
+#nice blockquote {                  /* 原文摘录 */
+  font-size: 13px;                 /* 15 − 2 */
+  line-height: 1.8;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-left: 3px solid #9c2b2b;
+  background: #faf7f7;
+  color: #1a1a1a;
+}
+
+#nice blockquote p { font-size: 13px; margin: 0 0 6px; }
+#nice blockquote p:last-child { margin-bottom: 0; }
+
+#nice em {                          /* 编者译，仅供参考 */
+  font-style: normal;
+  font-size: 10px;                 /* 12 − 2 */
+  color: #8a8a8a;
+}
+
+#nice p code,
+#nice li code {                     /* 关键词标签 */
+  font-size: 10px;
+  font-family: inherit;
+  color: #8a8a8a;
+  background: transparent;
+  border: 1px solid #e6e6e6;
+  border-radius: 2px;
+  padding: 2px 8px;
+  margin: 0 5px 5px 0;
+  display: inline-block;
+  line-height: 1.6;
+}
+
+#nice table {                       /* 会议日历 */
+  font-size: 11px;                 /* 13 − 2 */
+  line-height: 1.7;
+  border-collapse: collapse;
+  margin: 2px 0 16px;
+  display: table;
+  width: auto;
+}
+
+#nice table th,
+#nice table td {
+  padding: 3px 12px 3px 0;
+  border: none;
+  text-align: left;
+  vertical-align: top;
+  background: transparent;
+}
+
+#nice table th { color: #8a8a8a; font-weight: 400; }
+
+#nice hr {
+  height: 1px;
+  border: none;
+  background: #e6e6e6;
+  margin: 30px 0;
+}
+
+#nice a { color: #576b95; text-decoration: none; }
+
+#nice strong { font-weight: 600; color: #1a1a1a; }
+
+#nice figcaption,
+#nice .footnotes,
+#nice .footnote-word,
+#nice .footnote-item p { font-size: 10px; color: #8a8a8a; }
+
+#nice img { max-width: 100%; border-radius: 2px; }
