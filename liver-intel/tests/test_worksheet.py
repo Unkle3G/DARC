@@ -35,14 +35,14 @@ def test_filled_worksheet_is_applied_through_the_acceptance_checks(tmp_path):
     path = tmp_path / "w.json"
     worksheet.write([item], path, "2026-09-14")
     sheet = json.loads(path.read_text(encoding="utf-8"))
-    sheet["entries"][0]["zh"] = "III期试验达到主要终点"
+    sheet["entries"][0]["zh"] = "Phase 3 试验达到主要终点"
     sheet["entries"][1]["zh"] = "达到主要终点，重磅利好"      # evaluative -> rejected
     sheet["entries"][2]["zh"] = "已终止"
     path.write_text(json.dumps(sheet, ensure_ascii=False), encoding="utf-8")
 
     accepted, rejected, reasons = worksheet.apply([item], path)
     assert (accepted, rejected) == (2, 1)
-    assert item.meta["title_zh"] == "III期试验达到主要终点"
+    assert item.meta["title_zh"] == "Phase 3 试验达到主要终点"
     assert item.evidence.quotes[0].translation == ""
     assert item.evidence.quotes[1].translation == "已终止"
     assert reasons and "quote:0" in reasons[0]
@@ -76,7 +76,7 @@ def test_render_rebuilds_the_reports_from_the_worksheet(tmp_path, monkeypatch, d
     worksheet.write([item], sheet_path, "2026-09-14")
     sheet = json.loads(sheet_path.read_text(encoding="utf-8"))
     for entry in sheet["entries"]:
-        entry["zh"] = {"title": "III期试验达到主要终点", "quote": "达到主要终点",
+        entry["zh"] = {"title": "Phase 3 试验达到主要终点", "quote": "达到主要终点",
                        "field": "已终止"}[entry["kind"]]
     sheet_path.write_text(json.dumps(sheet, ensure_ascii=False), encoding="utf-8")
 
@@ -84,7 +84,7 @@ def test_render_rebuilds_the_reports_from_the_worksheet(tmp_path, monkeypatch, d
     assert "renderings from worksheet: 3 accepted, 0 rejected" in rendered.notes
     article = rendered.wechat_path.read_text(encoding="utf-8")
     assert "Phase 3 trial met the primary endpoint</h2>" in article
-    assert article.index("primary endpoint</h2>") < article.index("III期试验达到主要终点")
+    assert article.index("primary endpoint</h2>") < article.index("Phase 3 试验达到主要终点")
     assert "｜已终止" in article
     assert "达到主要终点" in rendered.report_path.read_text(encoding="utf-8")
     # the JSON carries the renderings too, so a second render is idempotent

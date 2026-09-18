@@ -84,7 +84,7 @@ def _record(item: Item, fields: list) -> list[str]:
     cells = []
     if item.meta.get("sponsor"):
         cells.append(f"**leadSponsor**：{esc(str(item.meta['sponsor']))}")
-    for quote in fields[:4]:
+    for quote in fields[:6]:
         label = esc(quote.locator.split("·")[-1].strip())
         value = esc(quote.text)
         if quote.translation and not is_chinese(quote.text):

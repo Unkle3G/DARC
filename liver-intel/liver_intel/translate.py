@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import os
 from typing import Any, Protocol
 
@@ -156,15 +157,46 @@ def quote_needs_rendering(quote: Any) -> bool:
     return needs_rendering(quote.text) and not quote.locator.endswith("· phases")
 
 
+#: Digit runs, which a rendering must carry over unchanged.
+_NUMBERS = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _numbers_survive(source: str, rendering: str) -> bool:
+    """Every number in the source appears in the rendering.
+
+    The other checks ask whether a rendering *looks* like a rendering; none of
+    them asks whether it renders *this* text. A worksheet slot carrying the
+    wrong translation published an enrolment count of "62 (ACTUAL)" as a
+    sentence about why the sponsor stopped the trial, and nothing objected.
+    Numbers are the part of a source that must survive translation intact, so
+    they double as the cheapest possible check that the two texts match --
+    and a rendering that drops or alters a percentage, a dose or a confidence
+    interval is a defect in its own right.
+    """
+    wanted = _NUMBERS.findall(source or "")
+    if not wanted:
+        return True
+    found = _NUMBERS.findall(rendering or "")
+    for number in wanted:
+        if number not in found:
+            return False
+        found.remove(number)
+    return True
+
+
 def _accept(source: str, rendering: str, where: str) -> str:
-    """A rendering is kept only when it is Chinese, differs from its source and
-    carries no judgement. Anything else is dropped rather than published."""
+    """A rendering is kept only when it is Chinese, differs from its source,
+    carries every number in the source and carries no judgement. Anything else
+    is dropped rather than published."""
     rendering = (rendering or "").strip()
     # "Contains Chinese", not "mostly Chinese": a rendering that keeps a proper
     # noun as written ("MagIA Diagnostics 清算") is dominated by Latin letters
     # by design, and the ratio test rejected exactly the renderings that
     # followed the rules best.
     if not rendering or rendering == source.strip() or not _CJK.search(rendering):
+        return ""
+    if not _numbers_survive(source, rendering):
+        log.warning("dropped a rendering: numbers do not match the source (%s)", where)
         return ""
     try:
         assert_not_evaluative(rendering, where)

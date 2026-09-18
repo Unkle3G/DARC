@@ -22,6 +22,7 @@ from .models import Item, Quote, dedup, today_iso
 from .sources import Context, build_sources
 from .store import Store
 from .tagger import Tagger
+from .textutil import abstract_findings
 from .workdays import Verdict, verdict as workday_verdict
 
 log = logging.getLogger(__name__)
@@ -120,24 +121,50 @@ def enrich(items: Iterable[Item], ctx: Context, judge: llm.Judge,
     return out
 
 
+#: How many quotes the deterministic rules may attach to one item.
+RULE_QUOTE_CAP = 4
+
+
 def _attach_rule_evidence(item: Item, source_text: str, tagger: Tagger) -> None:
     """Quote the source for signals the deterministic rules fired.
 
     The significance step supplies evidence for what it finds; rule signals need
     the same backing, or a P0 could ship with nothing to check it against.
     Sentences are copied verbatim, so they pass ``models.validate_quotes``.
+
+    A paper's findings come first, then the study-tag sentences. The tags are
+    vocabulary about what *kind* of study this is -- PHASE2, PRECLINICAL,
+    REAL_WORLD -- so the sentence they match is the one saying "this was a
+    preclinical model", almost never the one saying what the model showed. A
+    measured day had three of five journal articles shipping with no rule quote
+    at all and the other two quoting closing boilerplate.
     """
-    if not item.evidence.signals or not source_text.strip():
+    if not source_text.strip():
         return
     already = {quote.text.strip() for quote in item.evidence.quotes}
+
+    def add(text: str, locator: str) -> bool:
+        text = text.strip()
+        if not text or text in already:
+            return True
+        already.add(text)
+        item.evidence.quotes.append(Quote(text=text, locator=locator))
+        return len(item.evidence.quotes) < RULE_QUOTE_CAP
+
+    # A paper's findings are attached whether or not a rule signal fired. An
+    # item with no signal does not compete for a daily slot anyway, but it does
+    # reach the weekly digest, and the judgement step can lift it later -- by
+    # which time this function has already run, so waiting for a signal would
+    # leave exactly the lifted items with nothing to quote.
+    if item.meta.get("src_kind") == "journal":
+        for label, sentence in abstract_findings(source_text):
+            if not add(sentence, f"摘要:{label}"):
+                return
+    if not item.evidence.signals:
+        return
     for tag, sentence in tagger.study_evidence(source_text, item.study):
-        sentence = sentence.strip()
-        if sentence in already:
-            continue
-        already.add(sentence)
-        item.evidence.quotes.append(Quote(text=sentence, locator=f"tag:{tag}"))
-        if len(item.evidence.quotes) >= 4:
-            break
+        if not add(sentence, f"tag:{tag}"):
+            return
 
 
 def fetch_images(items: Iterable[Item], ctx: Context, out_dir: Path) -> int:

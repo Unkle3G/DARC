@@ -41,10 +41,10 @@ def test_null_translator_leaves_originals_alone():
 
 def test_title_and_rule_quotes_get_renderings():
     item = make(quotes=[Quote(text="met the primary endpoint", locator="tag:ENDPOINT_MET")])
-    client = FakeClient(["III期试验达到主要终点", "达到主要终点"])
+    client = FakeClient(["Phase 3 试验达到主要终点", "达到主要终点"])
     filled = translate.apply(item, translate.ClaudeTranslator(client=client))
     assert filled == 2
-    assert item.meta["title_zh"] == "III期试验达到主要终点"
+    assert item.meta["title_zh"] == "Phase 3 试验达到主要终点"
     assert item.evidence.quotes[0].translation == "达到主要终点"
     request = client.requests[0]
     assert request["model"] == "claude-opus-5"
@@ -70,9 +70,9 @@ def test_existing_translation_from_the_significance_step_is_kept():
 
 def test_evaluative_rendering_is_dropped():
     item = make(quotes=[Quote(text="met the primary endpoint")])
-    client = FakeClient(["III期试验达到主要终点", "达到主要终点，重磅利好"])
+    client = FakeClient(["Phase 3 试验达到主要终点", "达到主要终点，重磅利好"])
     translate.apply(item, translate.ClaudeTranslator(client=client))
-    assert item.meta["title_zh"] == "III期试验达到主要终点"
+    assert item.meta["title_zh"] == "Phase 3 试验达到主要终点"
     assert item.evidence.quotes[0].translation == ""
 
 
@@ -108,3 +108,17 @@ def test_a_rendering_that_keeps_a_proper_noun_is_still_chinese():
     from liver_intel.translate import _accept
     assert _accept("Liquidation of MagIA Diagnostics", "MagIA Diagnostics 清算", "x") == "MagIA Diagnostics 清算"
     assert _accept("Liquidation of MagIA Diagnostics", "Liquidation of MagIA Diagnostics Ltd", "x") == ""
+
+
+def test_a_rendering_that_loses_the_source_numbers_is_dropped():
+    """The other checks ask whether it looks like a rendering, not whether it
+    renders *this* text. A mis-keyed worksheet slot published an enrolment of
+    "62 (ACTUAL)" as a sentence about why the sponsor stopped the trial."""
+    assert translate._accept("62 (ACTUAL)", "研究提前关闭，因申办方决定不再继续开发。", "x") == ""
+    assert translate._accept("425 adults were included.", "纳入了 425 名成人。", "x") \
+        == "纳入了 425 名成人。"
+    # A dropped or altered percentage is a defect in its own right.
+    assert translate._accept("plaque in 81.6% vs 60.7%", "斑块 81.6% vs 60%", "x") == ""
+    # No numbers to preserve: the other checks decide on their own.
+    assert translate._accept("Liquidation of MagIA Diagnostics",
+                             "MagIA Diagnostics 清算", "x") == "MagIA Diagnostics 清算"

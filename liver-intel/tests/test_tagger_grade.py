@@ -331,7 +331,7 @@ def test_a_results_sentence_is_not_cut_at_an_abbreviation():
     Results prose is built out of "vs." comparisons; splitting on every full
     stop cut "reduced injurious falls (4% vs. 12%)" into three fragments.
     """
-    from liver_intel.tagger import _split_sentences
+    from liver_intel.textutil import split_sentences as _split_sentences
 
     text = ("RESULTS: Lactulose reduced injurious falls (4% vs. 12%) and "
             "non-injurious falls (19% vs. 32%), with no differences in overt HE. "

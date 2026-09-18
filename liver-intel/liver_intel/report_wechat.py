@@ -205,7 +205,7 @@ def render_entry(item: Item, dm: DomainMap, index: int) -> str:
             cells.append(f'leadSponsor：<span style="color:{INK};">'
                          f'{esc(item.meta["sponsor"])}</span>')
         cells += [f'{esc(q.locator.split("·")[-1].strip())}：{_field_value(q)}'
-                  for q in fields[:4]]
+                  for q in fields[:6]]
         parts.append(f'<p style="{SMALL}">' + "　·　".join(cells) + "</p>")
     for quote in prose[:4]:
         parts.append(_quote(quote.text.strip(), quote.translation))

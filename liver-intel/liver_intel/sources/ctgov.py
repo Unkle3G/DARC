@@ -44,6 +44,12 @@ FIELDS = (
     "NCTId", "BriefTitle", "OverallStatus", "WhyStopped", "Phase",
     "LastUpdatePostDate", "ResultsFirstPostDate", "LeadSponsorName",
     "Condition", "StudyType", "PrimaryCompletionDate",
+    # What the trial was actually testing. Without these a reader learns only
+    # that a study stopped -- not what drug, in how many patients, against what
+    # endpoint. A withdrawn trial's "0 (ACTUAL)" enrolment against a planned
+    # number is itself the news.
+    "InterventionName", "EnrollmentCount", "EnrollmentType",
+    "PrimaryOutcomeMeasure",
 )
 
 
@@ -182,10 +188,14 @@ class CtGovSource(BaseSource):
                     f"Why stopped: {current.why_stopped}" if current.why_stopped else "",
                     f"Phase: {current.phase}" if current.phase else "",
                     f"Conditions: {', '.join(study.get('conditions') or [])}",
+                    f"Interventions: {study.get('interventions')}" if study.get("interventions") else "",
+                    f"Primary outcome: {study.get('primary_outcome')}" if study.get("primary_outcome") else "",
                 ])),
                 "quotable": "\n".join(filter(None, [
                     study.get("title"), current.why_stopped,
                     current.overall_status, current.phase,
+                    study.get("interventions"), study.get("enrolment"),
+                    study.get("primary_outcome"),
                 ])),
             },
         )
@@ -196,6 +206,9 @@ class CtGovSource(BaseSource):
         # paraphrased into a sentence the registry never wrote.
         for label, value in (("overallStatus", current.overall_status),
                              ("phases", current.phase),
+                             ("enrollment", study.get("enrolment")),
+                             ("interventions", study.get("interventions")),
+                             ("primaryOutcome", study.get("primary_outcome")),
                              ("whyStopped", current.why_stopped)):
             if value:
                 item.evidence.quotes.append(
@@ -247,6 +260,11 @@ def _flatten(study: dict[str, Any]) -> dict[str, Any]:
     sponsor = (protocol.get("sponsorCollaboratorsModule") or {}).get("leadSponsor") or {}
     conditions = (protocol.get("conditionsModule") or {}).get("conditions") or []
     phases = design.get("phases") or []
+    interventions = [str(i.get("name") or "").strip() for i in
+                     (protocol.get("armsInterventionsModule") or {}).get("interventions") or []]
+    enrolment = design.get("enrollmentInfo") or {}
+    outcomes = [str(o.get("measure") or "").strip() for o in
+                (protocol.get("outcomesModule") or {}).get("primaryOutcomes") or []]
     return {
         "nct_id": ident.get("nctId") or study.get("NCTId"),
         "title": ident.get("briefTitle") or study.get("BriefTitle"),
@@ -261,4 +279,10 @@ def _flatten(study: dict[str, Any]) -> dict[str, Any]:
         "phase": ", ".join(phases) if phases else study.get("Phase"),
         "sponsor": sponsor.get("name") or study.get("LeadSponsorName"),
         "conditions": conditions or study.get("Condition") or [],
+        # Each name and measure is the registry's own string; only the "; "
+        # between them is ours, and each part stays searchable on the NCT page.
+        "interventions": "; ".join(filter(None, interventions)),
+        "enrolment": (f"{enrolment['count']} ({enrolment.get('type') or 'UNSPECIFIED'})"
+                      if enrolment.get("count") is not None else ""),
+        "primary_outcome": "; ".join(filter(None, outcomes)),
     }

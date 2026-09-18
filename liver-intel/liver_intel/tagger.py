@@ -22,7 +22,7 @@ from typing import Iterable, Sequence
 
 from .domain_map import Company, DomainMap, Kol, load_cached
 from .models import Item
-from .textutil import lead
+from .textutil import lead, split_sentences
 
 # --- layer 2 vocabulary ---------------------------------------------------
 # (tag, english patterns, chinese patterns).  English patterns are matched with
@@ -312,7 +312,7 @@ class Tagger:
         announced.
         """
         out: list[SentenceTags] = []
-        for sentence in _split_sentences(text or ""):
+        for sentence in split_sentences(text or ""):
             tags = {tag for tag, pattern in self._study if pattern.search(sentence)}
             if "SUBMISSION" in tags and WITHDRAWAL_CONTEXT.search(sentence):
                 tags.discard("SUBMISSION")
@@ -379,7 +379,7 @@ class Tagger:
         same quote check the LLM output goes through.
         """
         wanted = set(tags) if tags is not None else None
-        sentences = _split_sentences(text or "")
+        sentences = split_sentences(text or "")
         out: list[tuple[str, str]] = []
         for tag, pattern in self._study:
             if wanted is not None and tag not in wanted:
@@ -438,34 +438,3 @@ class Tagger:
         if result.company_tier is not None:
             meta["company_tier"] = result.company_tier
         return item
-
-
-#: Abbreviations whose full stop does not end a sentence. Results prose is full
-#: of them -- "reduced injurious falls (4% vs. 12%)" was being cut in half at
-#: "vs.", and a quote is published verbatim, so half a sentence ships as the
-#: evidence for a signal.
-_ABBREVIATIONS = frozenset("""
-vs v.s cf e.g i.e etc al no nos fig figs eq eqs ref refs approx ca est
-vol pp p pt ch sec dr mr mrs ms prof st jr sr inc ltd co corp
-""".split())
-
-#: A newline always ends a sentence (abstracts are section-per-line); a full
-#: stop ends one only when the token in front of it is not an abbreviation.
-_BOUNDARY = re.compile(r"\n+|(?<=[.!?\u3002\uff01\uff1f])[ \t]+")
-_TRAILING_TOKEN = re.compile(r"([A-Za-z][A-Za-z.]*)\.$")
-
-
-def _split_sentences(text: str) -> list[str]:
-    text = text or ""
-    parts: list[str] = []
-    start = 0
-    for match in _BOUNDARY.finditer(text):
-        head = text[start:match.start()]
-        if not match.group(0).startswith("\n"):
-            token = _TRAILING_TOKEN.search(head.rstrip())
-            if token and token.group(1).strip(".").lower() in _ABBREVIATIONS:
-                continue
-        parts.append(head.strip())
-        start = match.end()
-    parts.append(text[start:].strip())
-    return [part for part in parts if len(part) > 12]

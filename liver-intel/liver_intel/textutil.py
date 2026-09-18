@@ -133,3 +133,82 @@ def pdf_text(data: bytes, max_pages: int = 6) -> str:
     except Exception as exc:
         log.info("could not read PDF: %s", exc)
         return ""
+
+
+#: Abbreviations whose full stop does not end a sentence. Results prose is full
+#: of them -- "reduced injurious falls (4% vs. 12%)" was being cut in half at
+#: "vs.", and a quote is published verbatim, so half a sentence ships as the
+#: evidence for a signal.
+_ABBREVIATIONS = frozenset("""
+vs v.s cf e.g i.e etc al no nos fig figs eq eqs ref refs approx ca est
+vol pp p pt ch sec dr mr mrs ms prof st jr sr inc ltd co corp
+""".split())
+
+#: A newline always ends a sentence (abstracts are section-per-line); a full
+#: stop ends one only when the token in front of it is not an abbreviation.
+_BOUNDARY = re.compile(r"\n+|(?<=[.!?\u3002\uff01\uff1f])[ \t]+")
+_TRAILING_TOKEN = re.compile(r"([A-Za-z][A-Za-z.]*)\.$")
+
+
+def split_sentences(text: str) -> list[str]:
+    """Sentences, verbatim, without splitting inside an abbreviation."""
+    text = text or ""
+    parts: list[str] = []
+    start = 0
+    for match in _BOUNDARY.finditer(text):
+        head = text[start:match.start()]
+        if not match.group(0).startswith("\n"):
+            token = _TRAILING_TOKEN.search(head.rstrip())
+            if token and token.group(1).strip(".").lower() in _ABBREVIATIONS:
+                continue
+        parts.append(head.strip())
+        start = match.end()
+    parts.append(text[start:].strip())
+    return [part for part in parts if len(part) > 12]
+
+
+#: A structured abstract labels its own sections. PubMed keeps the labels, so
+#: "where does this paper say what it found" needs no judgement -- it is the
+#: first sentence under RESULTS and under CONCLUSIONS.
+_SECTION = re.compile(r"(?m)^[ \t]*([A-Z][A-Z0-9 /&'()-]{2,40}):[ \t]*")
+
+#: Label -> which of the two findings slots it fills. DISCUSSION is a fallback:
+#: some journals use it where others write CONCLUSIONS, but CONCLUSIONS wins
+#: when a paper carries both.
+_RESULT_LABELS = ("RESULT", "FINDING")
+_CONCLUSION_LABELS = (("CONCLUSION", "INTERPRETATION"), ("DISCUSSION",))
+
+
+def abstract_findings(text: str) -> list[tuple[str, str]]:
+    """(label, first sentence) for the RESULTS and CONCLUSIONS sections.
+
+    Empty for an unstructured abstract, which is the honest answer: without the
+    labels there is no rule that reliably finds the finding, and a guess would
+    ship as a verbatim quote. Those are left to the judgement worksheet.
+    """
+    matches = list(_SECTION.finditer(text or ""))
+    if not matches:
+        return []
+    sections: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        sections.append((match.group(1).upper(), text[match.end():end].strip()))
+
+    def first(predicate) -> tuple[str, str] | None:
+        for label, body in sections:
+            if predicate(label):
+                head = split_sentences(body)
+                if head:
+                    return (label, head[0])
+        return None
+
+    out: list[tuple[str, str]] = []
+    found = first(lambda label: any(word in label for word in _RESULT_LABELS))
+    if found:
+        out.append(found)
+    for group in _CONCLUSION_LABELS:
+        found = first(lambda label: any(word in label for word in group))
+        if found:
+            out.append(found)
+            break
+    return out
