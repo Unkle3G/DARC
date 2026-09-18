@@ -1,0 +1,40 @@
+{
+  "note": "期刊分层名册。匹配用 PubMed esummary 的 fulljournalname（每个都已通过 PubMed API 核对，不是凭记忆写的），大小写不敏感，按前缀匹配以容纳 'Hepatology (Baltimore, Md.)' 这类括号后缀。A 层为操作者点名的五本及其同级；B 层为我提议的一档之下的领域主力刊，operator_confirmed=false 表示待确认，可直接增删。名册只决定分级权重，不决定是否采集：不在名册上的期刊照常采集，只是进不了日报。",
+  "operator_confirmed": false,
+  "tiers": {
+    "A": {
+      "label": "顶级综合刊与肝病/消化领域旗舰刊",
+      "note": "操作者点名：J Hepatol、Hepatology、Gut、Lancet Gastro Hep、NEJM。其余为我按'差不多级别'补入，待确认。",
+      "journals": [
+        {"name": "Journal of hepatology", "abbrev": "J Hepatol", "named_by_operator": true},
+        {"name": "Hepatology (Baltimore, Md.)", "abbrev": "Hepatology", "named_by_operator": true},
+        {"name": "Gut", "abbrev": "Gut", "named_by_operator": true},
+        {"name": "The lancet. Gastroenterology & hepatology", "abbrev": "Lancet Gastroenterol Hepatol", "named_by_operator": true},
+        {"name": "The New England journal of medicine", "abbrev": "N Engl J Med", "named_by_operator": true},
+        {"name": "Gastroenterology", "abbrev": "Gastroenterology", "named_by_operator": false},
+        {"name": "Lancet (London, England)", "abbrev": "Lancet", "named_by_operator": false},
+        {"name": "JAMA", "abbrev": "JAMA", "named_by_operator": false},
+        {"name": "Nature medicine", "abbrev": "Nat Med", "named_by_operator": false},
+        {"name": "Nature", "abbrev": "Nature", "named_by_operator": false},
+        {"name": "Science (New York, N.Y.)", "abbrev": "Science", "named_by_operator": false}
+      ]
+    },
+    "B": {
+      "label": "领域主力刊，低 A 层一档",
+      "note": "全部为我提议，待确认。B 层单独不入日报，只有携带临床结果信号时才升到 P2。",
+      "journals": [
+        {"name": "Clinical gastroenterology and hepatology", "abbrev": "Clin Gastroenterol Hepatol", "named_by_operator": false},
+        {"name": "The American journal of gastroenterology", "abbrev": "Am J Gastroenterol", "named_by_operator": false},
+        {"name": "JHEP reports", "abbrev": "JHEP Rep", "named_by_operator": false},
+        {"name": "Liver international", "abbrev": "Liver Int", "named_by_operator": false},
+        {"name": "Hepatology international", "abbrev": "Hepatol Int", "named_by_operator": false},
+        {"name": "Hepatology communications", "abbrev": "Hepatol Commun", "named_by_operator": false},
+        {"name": "Alimentary pharmacology & therapeutics", "abbrev": "Aliment Pharmacol Ther", "named_by_operator": false},
+        {"name": "Nature reviews. Gastroenterology & hepatology", "abbrev": "Nat Rev Gastroenterol Hepatol", "named_by_operator": false},
+        {"name": "Cell metabolism", "abbrev": "Cell Metab", "named_by_operator": false},
+        {"name": "Annals of internal medicine", "abbrev": "Ann Intern Med", "named_by_operator": false},
+        {"name": "BMJ (Clinical research ed.)", "abbrev": "BMJ", "named_by_operator": false}
+      ]
+    }
+  }
+}

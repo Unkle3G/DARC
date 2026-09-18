@@ -15,6 +15,7 @@ from typing import Iterable
 
 from .config import MAIN_LINES
 from .domain_map import DomainMap, load_cached
+from .journals import tier_of
 from .models import Item
 
 #: The closed signal vocabulary.  ``hard`` signals are P0 on their own; ``soft``
@@ -37,6 +38,8 @@ SIGNALS: dict[str, dict[str, object]] = {
     "PH3_START":         {"weight": "soft", "desc": "Phase 3 initiated or first patient dosed"},
     "DEAL":              {"weight": "soft", "desc": "Licensing, collaboration or asset transaction"},
     "PIVOTAL_PUBLICATION": {"weight": "soft", "desc": "Pivotal data published in a peer-reviewed journal"},
+    "JOURNAL_PIVOTAL":   {"weight": "soft",
+                          "desc": "Clinical result published in a roster tier-A journal"},
     "GUIDELINE":         {"weight": "soft", "desc": "Society guideline or consensus statement"},
     "SAFETY_WATCH":      {"weight": "soft", "desc": "Hepatotoxicity or DILI signal short of a serious case"},
     # --- background (P2) ---
@@ -47,6 +50,8 @@ SIGNALS: dict[str, dict[str, object]] = {
     "REG_LIST_CHANGE":   {"weight": "background", "desc": "Regulator list page changed (acceptance, review queue)"},
     "REG_TRIAL_CLEARANCE": {"weight": "background",
                             "desc": "Clinical trial application (IND/CTA) cleared -- permission to start a trial, not a marketing approval"},
+    "JOURNAL_MAJOR":     {"weight": "background",
+                          "desc": "Roster journal publication without a clinical result"},
     "CORPORATE":         {"weight": "background", "desc": "Financing, personnel or other corporate item"},
 }
 
@@ -123,7 +128,39 @@ def rule_signals(item: Item) -> list[str]:
         for signal in _signals_for(study, item):
             if signal not in out:
                 out.append(signal)
+    for signal in _journal_signals(item, {tag for group in groups for tag in group}):
+        if signal not in out:
+            out.append(signal)
     return out
+
+
+#: What makes a paper a *result* rather than a review, an editorial or a
+#: mechanism study. The roster decides which journals count; this decides
+#: whether the paper reports something clinical.
+CLINICAL_EVIDENCE = {"TOPLINE", "INTERIM", "ENDPOINT_MET", "ENDPOINT_MISSED",
+                     "BIOPSY_ENDPOINT", "PHASE2", "PHASE3", "PHASE4", "REAL_WORLD",
+                     "SAFETY_SIGNAL", "DILI_SIGNAL"}
+
+
+def _journal_signals(item: Item, study: set[str]) -> list[str]:
+    """Weight a paper by where it appeared and whether it reports a result.
+
+    PubMed indexes everything, so "published" says nothing on its own: before
+    the roster existed, every article fired PUBLICATION alone, which is no
+    signal, and the literature never left P3. A journal off the roster still
+    collects and still reaches the weekly digest -- it just does not compete
+    for a daily slot.
+    """
+    if item.meta.get("src_kind") != "journal":
+        return []
+    tier = tier_of(str(item.meta.get("journal") or ""))
+    if not tier:
+        return []
+    item.meta["journal_tier"] = tier
+    clinical = bool(study & CLINICAL_EVIDENCE)
+    if tier == "A":
+        return ["JOURNAL_PIVOTAL"] if clinical else ["JOURNAL_MAJOR"]
+    return ["JOURNAL_MAJOR"] if clinical else []
 
 
 def _signals_for(study: set[str], item: Item) -> list[str]:

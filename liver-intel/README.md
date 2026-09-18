@@ -162,17 +162,36 @@ affiliations (for the materials library) and the **abstract**, which becomes
 evidence — the journal published it). A structured abstract keeps its section
 labels, so the tagger sees `RESULTS: ...`; the copyright line is dropped.
 
-Two gaps remain, and both need the operator's own policy before they can be
-closed:
+### The journal roster
 
-* **no journal roster.** The domain map weights `src_kind: journal` at 0.6 and
-  makes no distinction between *Journal of Hepatology* and any other indexed
-  title. A tiered roster belongs in `data/domain_map_liver_v3.md`.
-* **one publication signal.** `PIVOTAL_PUBLICATION` needs Phase 3 in the text;
-  everything else fires `PUBLICATION` alone, which is no signal, so a cohort or
-  diagnostic study in a major journal still grades P3 and reaches only the
-  weekly digest. Splitting it (pivotal result / guideline / meta-analysis /
-  mechanism) is a grading-policy decision, not a code one.
+PubMed indexes everything, so "published" says nothing on its own. Which
+journals a liver brief should surface is the operator's policy, and it lives in
+`data/journals_liver.json` beside the disease lines — tier A (the five the
+operator named plus their peers) and tier B (field journals one notch down).
+Every `fulljournalname` in it was checked against the PubMed API rather than
+written from memory.
+
+Matching cuts the catalogue's qualifier — `Hepatology (Baltimore, Md.)`,
+`Clinical gastroenterology and hepatology : the official ...` — and then matches
+**exactly**. Not as a prefix: a prefix rule looks right until it puts *Nature
+structural & molecular biology* in the same tier as *Nature*.
+
+Two signals come out of it:
+
+| | clinical result in the text | no clinical result |
+| --- | --- | --- |
+| tier A | `JOURNAL_PIVOTAL` (P1) | `JOURNAL_MAJOR` (P2) |
+| tier B | `JOURNAL_MAJOR` (P2) | nothing (P3) |
+| off the roster | nothing (P3) | nothing (P3) |
+
+"Clinical result" means the text carries one of `CLINICAL_EVIDENCE` in
+`grade.py` (topline, interim, an endpoint verdict, a biopsy endpoint, a trial
+phase, real-world data, a safety signal).
+
+**The roster decides weight, not collection.** A journal that is not on it is
+still collected, still tagged, still in the weekly digest — it just does not
+compete for a daily slot. `operator_confirmed` in the file is `false` until the
+operator has been through tier B.
 
 ## Materials library (backend only)
 

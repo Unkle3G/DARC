@@ -98,6 +98,9 @@ def render_item(item: Item, dm: DomainMap, index: int) -> str:
         lines.append(f"- 研究标签：{' / '.join(item.study)}")
     lines.append(f"- 命中信号：{_signals_line(item)}")
     lines.extend(_evidence_block(item))
+    if item.meta.get("journal_tier"):
+        lines.append(f"- 期刊层级：{item.meta['journal_tier']} 层"
+                     f"（{item.meta.get('journal', '')}）")
     if item.meta.get("sponsor"):
         lines.append(f"- 申办方（leadSponsor）：{item.meta['sponsor']}")
     if item.meta.get("state_changes"):
