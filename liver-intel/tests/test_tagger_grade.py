@@ -306,3 +306,20 @@ def test_prose_fragments_are_not_drug_codes():
     found = Tagger._drugs("SEEN ON 09 September with MK-3475 and TQB6426 and EN 09 and AB 12345")
     assert "EN 09" not in found and "ON 09" not in found
     assert {"MK-3475", "TQB6426", "AB 12345"} <= set(found)
+
+
+def test_short_company_alias_does_not_match_a_numbered_gene_symbol():
+    """GSK the company vs. GSK-3β the kinase.
+
+    A phytochemical review that only named glycogen synthase kinase 3 was filed
+    under GSK and shipped with "出处：GSK" on it. A numbered suffix is what makes
+    a short all-caps alias a gene symbol rather than a company.
+    """
+    tagger = Tagger()
+    for text in ("Modulating GSK 3Β-driven autophagy in liver cancer",
+                 "GSK-3β inhibition in hepatocellular carcinoma",
+                 "GSK3 beta signalling in cirrhosis"):
+        companies, _, _ = tagger.tag_entities(text)
+        assert "GSK" not in [c.name for c in companies], text
+    companies, _, _ = tagger.tag_entities("GSK reported Phase 3 hepatitis B data")
+    assert "GSK" in [c.name for c in companies]

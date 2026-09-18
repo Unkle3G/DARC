@@ -183,11 +183,23 @@ def _compile(patterns: Iterable[str]) -> re.Pattern[str]:
     return re.compile(joined, re.I)
 
 
-def _term_pattern(terms: Iterable[str], prefix: bool = False) -> re.Pattern[str] | None:
+#: A short all-caps alias is also a gene symbol waiting to happen. ``GSK`` is
+#: the company; ``GSK 3Β`` and ``GSK-3β`` in a mechanism abstract are glycogen
+#: synthase kinase 3, and the word boundary alone cannot tell them apart -- a
+#: phytochemical review that merely named the kinase was filed under GSK and
+#: printed "出处：GSK". A numbered suffix is what makes it a symbol, so short
+#: aliases refuse to match in front of one.
+_SYMBOL_SUFFIX = r"(?!\s*[-‐-―]?\s*\d)"
+
+
+def _term_pattern(terms: Iterable[str], prefix: bool = False,
+                  symbol_guard: bool = False) -> re.Pattern[str] | None:
     """Word-bounded for ASCII terms, plain containment for CJK.
 
     ``prefix=True`` drops the trailing boundary so a gate word like ``hepat``
-    covers hepatic / hepatology / hepatocellular.
+    covers hepatic / hepatology / hepatocellular.  ``symbol_guard=True`` keeps a
+    short all-caps term from matching a numbered gene symbol (see
+    ``_SYMBOL_SUFFIX``).
     """
     parts = []
     for term in terms:
@@ -197,6 +209,8 @@ def _term_pattern(terms: Iterable[str], prefix: bool = False) -> re.Pattern[str]
         escaped = re.escape(term).replace(r"\ ", r"\s+")
         if re.match(r"^[\x00-\x7f]+$", term):
             tail = "" if prefix else r"(?![A-Za-z0-9])"
+            if symbol_guard and len(term) <= 4 and term.isupper() and term.isalpha():
+                tail += _SYMBOL_SUFFIX
             parts.append(rf"(?<![A-Za-z0-9]){escaped}{tail}")
         else:
             parts.append(escaped)
@@ -226,7 +240,7 @@ class Tagger:
                        for tag, en, zh in STUDY_PATTERNS]
         self._companies: list[tuple[Company, re.Pattern[str]]] = []
         for company in self.dm.companies:
-            pattern = _term_pattern(company.aliases)
+            pattern = _term_pattern(company.aliases, symbol_guard=True)
             if pattern is not None:
                 self._companies.append((company, pattern))
         self._kols: list[tuple[Kol, re.Pattern[str]]] = []
