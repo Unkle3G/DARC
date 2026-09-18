@@ -563,3 +563,21 @@ def test_an_article_without_an_abstract_still_collects(store, fake_fetcher, doma
         ctx, "222", {"title": "Editorial on MASH", "fulljournalname": "Hepatology"}, "")
     assert item is not None and item.meta["has_abstract"] is False
     assert item.meta["body"] == "Editorial on MASH"
+
+
+def test_a_correction_notice_is_not_collected_as_a_paper(store, fake_fetcher, domain_map):
+    """"Corrigendum to: COMMD10 inhibits HIF1a/CP loop..." shipped as an item.
+
+    A correction carries a title and an abstract like any article, so nothing
+    downstream can tell it apart; PubMed's own publication type can.
+    """
+    from liver_intel.sources.pubmed import PubmedSource
+
+    source = PubmedSource()
+    ctx = context(store, fake_fetcher, domain_map)
+    record = {"title": "Corrigendum to: COMMD10 inhibits the HIF1a/CP loop.",
+              "fulljournalname": "Hepatology", "sortpubdate": "2026/09/16 00:00",
+              "pubtype": ["Published Erratum", "Journal Article"], "authors": []}
+    assert source._to_item(ctx, "1", record, "A correction to the original.") is None
+    record["pubtype"] = ["Journal Article"]
+    assert source._to_item(ctx, "2", record, "A correction to the original.") is not None

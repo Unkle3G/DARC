@@ -194,20 +194,25 @@ def abstract_findings(text: str) -> list[tuple[str, str]]:
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         sections.append((match.group(1).upper(), text[match.end():end].strip()))
 
-    def first(predicate) -> tuple[str, str] | None:
+    def pick(predicate, which: int) -> tuple[str, str] | None:
         for label, body in sections:
             if predicate(label):
-                head = split_sentences(body)
-                if head:
-                    return (label, head[0])
+                sentences = split_sentences(body)
+                if sentences:
+                    return (label, sentences[which])
         return None
 
     out: list[tuple[str, str]] = []
-    found = first(lambda label: any(word in label for word in _RESULT_LABELS))
+    # RESULTS opens on the baseline -- "MASLD was present in 47.3% of
+    # participants", "192 patients were studied" -- and closes on the finding
+    # the section was written to deliver, so the last sentence is the one worth
+    # quoting. CONCLUSIONS is the other way round: its first sentence states the
+    # claim and the rest qualifies it.
+    found = pick(lambda label: any(word in label for word in _RESULT_LABELS), -1)
     if found:
         out.append(found)
     for group in _CONCLUSION_LABELS:
-        found = first(lambda label: any(word in label for word in group))
+        found = pick(lambda label: any(word in label for word in group), 0)
         if found:
             out.append(found)
             break

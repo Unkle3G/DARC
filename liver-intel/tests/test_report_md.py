@@ -150,3 +150,27 @@ def test_operator_notes_never_reach_the_reader(domain_map):
 def test_empty_day_still_renders(domain_map):
     md = wechat_markdown([], "2026-09-15", domain_map)
     assert "没有达到入选门槛" in md
+
+
+def test_a_journal_entry_carries_its_own_record_line():
+    """A registry entry showed six fields while a paper beside it showed none."""
+    from liver_intel.report_wechat import journal_record
+
+    item = Item(src="pubmed", title="A trial", url="u", date="2026-09-18",
+                meta={"src_kind": "journal", "journal": "Hepatology",
+                      "authors": ["Tapper EB", "Asrani S"],
+                      "publication_types": ["Review"],
+                      "doi": "10.1097/HEP.0000000000001869"})
+    assert journal_record(item) == [
+        ("作者", "Tapper EB 等"),
+        ("文献类型", "Review"),
+        ("DOI", "10.1097/HEP.0000000000001869"),
+    ]
+    # A registry record is not a journal record.
+    assert journal_record(Item(src="ctgov", title="t", url="u", date="d",
+                               meta={"src_kind": "registry"})) == []
+    # A sole author is not "等", and a bare "Journal Article" carries no type.
+    solo = Item(src="pubmed", title="A", url="u", date="d",
+                meta={"src_kind": "journal", "authors": ["Solo A"],
+                      "publication_types": [], "doi": ""})
+    assert journal_record(solo) == [("作者", "Solo A")]

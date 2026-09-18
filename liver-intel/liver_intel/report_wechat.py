@@ -170,6 +170,29 @@ def provenance(item: Item) -> str:
     return " · ".join(b for b in bits if b)
 
 
+def journal_record(item: Item) -> list[tuple[str, str]]:
+    """A paper's own catalogue facts, as (label, value) pairs.
+
+    A registry entry showed six fields while a journal entry beside it showed
+    none, so a paper read as the thinner item even when it was the bigger news.
+    These are PubMed's own fields, not a summary: who wrote it, what kind of
+    article the catalogue says it is, and the DOI. "Journal Article" is dropped
+    upstream because every record carries it.
+    """
+    if item.meta.get("src_kind") != "journal":
+        return []
+    out: list[tuple[str, str]] = []
+    authors = [a for a in (item.meta.get("authors") or []) if a]
+    if authors:
+        out.append(("作者", f"{authors[0]} 等" if len(authors) > 1 else authors[0]))
+    kinds = [k for k in (item.meta.get("publication_types") or []) if k]
+    if kinds:
+        out.append(("文献类型", ", ".join(kinds)))
+    if item.meta.get("doi"):
+        out.append(("DOI", str(item.meta["doi"])))
+    return out
+
+
 def _field_value(quote) -> str:
     value = f'<span style="color:{INK};">{esc(quote.text)}</span>'
     if quote.translation and not is_chinese(quote.text):
@@ -195,17 +218,20 @@ def render_entry(item: Item, dm: DomainMap, index: int) -> str:
     # says nothing twice.
     prose = [q for q in item.evidence.quotes
              if q not in fields and normalise(q.text) != normalise(item.title)]
+    # A registry states its facts in fields. Three one-word pull quotes read
+    # as noise; the same values on one line read as a record. The lead
+    # sponsor opens the record: "awaiting agreement with Sponsor" means
+    # nothing until the sponsor is named. A paper's catalogue facts go on the
+    # same line, so a journal entry is not the bare one next to a registry one.
+    cells = [f'{esc(label)}：<span style="color:{INK};">{esc(value)}</span>'
+             for label, value in journal_record(item)]
     if fields:
-        # A registry states its facts in fields. Three one-word pull quotes read
-        # as noise; the same values on one line read as a record. The lead
-        # sponsor opens the record: "awaiting agreement with Sponsor" means
-        # nothing until the sponsor is named.
-        cells = []
         if item.meta.get("sponsor"):
             cells.append(f'leadSponsor：<span style="color:{INK};">'
                          f'{esc(item.meta["sponsor"])}</span>')
         cells += [f'{esc(q.locator.split("·")[-1].strip())}：{_field_value(q)}'
                   for q in fields[:6]]
+    if cells:
         parts.append(f'<p style="{SMALL}">' + "　·　".join(cells) + "</p>")
     for quote in prose[:4]:
         parts.append(_quote(quote.text.strip(), quote.translation))

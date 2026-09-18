@@ -34,6 +34,15 @@ QUERY_TERMS = (
 DEFAULT_DAYS = 3
 
 
+#: PubMed publication types that announce a change to the record rather than a
+#: finding. They carry a title and an abstract like any article, so nothing
+#: downstream can tell them apart -- the catalogue's own label is the only
+#: honest signal.
+NOT_NEWS = frozenset({"Published Erratum", "Retraction of Publication",
+                      "Retracted Publication", "Corrected and Republished Article",
+                      "Expression of Concern"})
+
+
 class PubmedSource(BaseSource):
     id = "pubmed"
     task = "T4"
@@ -134,6 +143,13 @@ class PubmedSource(BaseSource):
                 "pub_date": pub_date,
                 "pub_date_is_future": bool(pub_date and pub_date > ctx.today),
                 "authors": [a.get("name") for a in (record.get("authors") or [])][:12],
+                # A journal entry used to carry no record line at all next to a
+                # registry entry's six fields. These are the catalogue's own
+                # facts about what the paper *is*: PubMed's publication types
+                # (Review, Case Reports, Editorial) and the DOI.
+                "publication_types": [t for t in (record.get("pubtype") or [])
+                                      if t and t != "Journal Article"],
+                "doi": _doi(record.get("elocationid")),
                 # The abstract is what the journal published about the study, so
                 # it is both what the tagger reads and what may be quoted. Without
                 # it the tagger saw a bare title, fired PUBLICATION alone, and
@@ -144,7 +160,20 @@ class PubmedSource(BaseSource):
                 "quotable": clip("\n".join(filter(None, [title, abstract])), 10_000),
             },
         )
+        if set(item.meta["publication_types"]) & NOT_NEWS:
+            # A correction notice is not a paper. "Corrigendum to: COMMD10
+            # inhibits HIF1a/CP loop..." collected and published as an item of
+            # its own; the catalogue already says what it is.
+            return None
         item.study.append("PUBLICATION")
         if ctx.store.is_seen(item.key):
             return None
         return item
+
+
+def _doi(elocationid: str | None) -> str:
+    """esummary writes the DOI as ``doi: 10.1097/HEP...`` in ``elocationid``."""
+    text = (elocationid or "").strip()
+    if not text.lower().startswith("doi:"):
+        return ""
+    return text.split(":", 1)[1].strip()

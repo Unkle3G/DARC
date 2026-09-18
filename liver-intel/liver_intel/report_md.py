@@ -31,7 +31,7 @@ from .images import from_meta
 from .keywords import reader_keywords
 from .models import Item, is_chinese
 from .report import WEEKDAY_ZH, coverage_window
-from .report_wechat import normalise, provenance
+from .report_wechat import journal_record, normalise, provenance
 
 TRANSLATED = "编者译，仅供参考"
 
@@ -80,8 +80,8 @@ def _figure(item: Item) -> list[str]:
 
 
 def _record(item: Item, fields: list) -> list[str]:
-    """A registry record's published field values, on one line."""
-    cells = []
+    """A record's published field values, on one line -- registry or journal."""
+    cells = [f"**{esc(label)}**：{esc(value)}" for label, value in journal_record(item)]
     if item.meta.get("sponsor"):
         cells.append(f"**leadSponsor**：{esc(str(item.meta['sponsor']))}")
     for quote in fields[:6]:
