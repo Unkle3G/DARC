@@ -48,8 +48,13 @@ BATCH = 150
 #: finding. They carry a title and an abstract like any article, so nothing
 #: downstream can tell them apart -- the catalogue's own label is the only
 #: honest signal.
+#: What the catalogue calls a correction notice varies between the indexed
+#: publication type and what esummary hands back, so both spellings are here:
+#: "RETRACTION: Long Noncoding RNA NR2F1-AS1..." arrived carrying the
+#: non-standard "Retraction Notice" and sailed past the standard names.
 NOT_NEWS = frozenset({"Published Erratum", "Retraction of Publication",
-                      "Retracted Publication", "Corrected and Republished Article",
+                      "Retracted Publication", "Retraction Notice",
+                      "Corrected and Republished Article",
                       "Expression of Concern"})
 
 

@@ -580,8 +580,13 @@ def test_a_correction_notice_is_not_collected_as_a_paper(store, fake_fetcher, do
               "fulljournalname": "Hepatology", "sortpubdate": "2026/09/16 00:00",
               "pubtype": ["Published Erratum", "Journal Article"], "authors": []}
     assert source._to_item(ctx, "1", record, "A correction to the original.") is None
+    # esummary also hands back a non-standard spelling: "RETRACTION: Long
+    # Noncoding RNA NR2F1-AS1..." arrived as "Retraction Notice" and sailed
+    # past the indexed names into the pool.
+    record["pubtype"] = ["Retraction Notice", "Journal Article"]
+    assert source._to_item(ctx, "2", record, "This article has been retracted.") is None
     record["pubtype"] = ["Journal Article"]
-    assert source._to_item(ctx, "2", record, "A correction to the original.") is not None
+    assert source._to_item(ctx, "3", record, "A correction to the original.") is not None
 
 
 def test_the_literature_window_is_paged_not_truncated(store, fake_fetcher, domain_map):
