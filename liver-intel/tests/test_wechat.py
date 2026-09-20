@@ -351,3 +351,29 @@ def test_the_record_block_is_one_fact_per_line_and_entries_are_ruled(domain_map)
     # A rule before every entry but the first, across the section break too.
     assert html.count(ENTRY_RULE) == 1
     assert html.index(ENTRY_RULE) < html.index("second")
+
+
+# --- issue number ---------------------------------------------------------
+def test_issue_number_sits_in_the_masthead_and_the_title(domain_map):
+    article = wechat_html([make()], "2026-09-14", domain_map, issue="003")
+
+    assert "HepaDaily｜第003期｜2026-09-14（周一）" in article
+    assert "<title>HepaDaily｜第003期｜2026-09-14</title>" in article
+
+
+def test_without_an_issue_the_masthead_is_unchanged(domain_map):
+    article = wechat_html([make()], "2026-09-14", domain_map)
+
+    assert "HepaDaily｜2026-09-14（周一）" in article
+    assert "期｜" not in article
+
+
+def test_the_issue_number_is_written_the_same_however_it_was_typed():
+    """``3``, ``003`` and ``第003期`` are one issue, not three."""
+    from liver_intel.report import issue_label
+
+    assert issue_label("3") == issue_label("003") == issue_label("第003期") == "第003期"
+    assert issue_label(3) == "第003期"
+    assert issue_label("") == "" and issue_label(None) == ""
+    # Anything that is not a plain number is the operator's own wording.
+    assert issue_label("创刊号") == "创刊号"

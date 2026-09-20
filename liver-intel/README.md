@@ -215,6 +215,11 @@ Nothing from this table is ever rendered into an article.
 the publishing path** (the operator's choice): it needs no third-party editor
 and no theme to install.
 
+`--issue 003` writes 期号 into the masthead (`HepaDaily｜第003期｜2026-09-20`).
+`3`, `003` and `第003期` all mean the same issue. The number is kept in the day's
+`_run.json`, so a later `judge` or `render` reprints it without being told
+again; `--issue` on those two overrides it.
+
 * `out/liver_daily_<date>_wechat.html` — styled inline (the WeChat editor strips
   `<style>` and `<link>`), sized for the ~677px column, `charset` declared so it
   opens correctly from disk. Open it in a browser, select all, copy, paste into

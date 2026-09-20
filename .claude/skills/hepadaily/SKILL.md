@@ -20,6 +20,10 @@ shipped, and you fill it in. No external model, no key.
 
        cd liver-intel && python3 -m liver_intel.cli daily --wechat
 
+   Add `--issue <n>` when the operator names an issue number (`--issue 003` ->
+   `HepaDaily｜第003期｜<date>` in the masthead). It is remembered in the day's
+   `_run.json`, so `judge` and `render` keep it.
+
    If a scheduled 03:00 run already collected today (out/liver_daily_<date>.json
    exists and is not empty), do **not** run `daily` again — it would find
    nothing new and the engine refuses to overwrite. Go straight to step 3 with

@@ -35,6 +35,10 @@ class RunResult:
     daily: list[Item] = field(default_factory=list)
     weekly: list[Item] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    #: The masthead issue number, e.g. ``第003期``. Carried in the run file so a
+    #: later ``judge``/``render`` keeps the number the day was published under
+    #: instead of silently dropping it.
+    issue: str = ""
     #: Set when the calendar said this is not a working day and nothing ran.
     skipped: Verdict | None = None
     report_path: Path | None = None
@@ -207,7 +211,8 @@ def _collapse(notes: list[str]) -> list[str]:
 def run_daily(settings: Settings, today: str | None = None, since: str | None = None,
               only: list[str] | None = None, use_llm: bool = True,
               write: bool = True, wechat: bool = False,
-              with_images: bool = False, ignore_calendar: bool = False) -> RunResult:
+              with_images: bool = False, ignore_calendar: bool = False,
+              issue: str | None = None) -> RunResult:
     settings.ensure_dirs()
     today = today or today_iso(settings.report_tz)
     if not ignore_calendar:
@@ -221,7 +226,7 @@ def run_daily(settings: Settings, today: str | None = None, since: str | None = 
     else:
         decision = None
     since = since or default_since(today)
-    result = RunResult(report_date=today)
+    result = RunResult(report_date=today, issue=issue or "")
     window_start, _ = report.coverage_window(today)
 
     with Store(settings.db_path) as store:
@@ -318,7 +323,8 @@ def _write_outputs(settings: Settings, result: RunResult, dm: DomainMap,
                    wechat: bool) -> None:
     today = result.report_date
     body = report.daily_markdown(result.daily, today, dm, notes=result.notes,
-                                 weekly_pool_size=len(result.weekly))
+                                 weekly_pool_size=len(result.weekly),
+                                 issue=result.issue)
     result.report_path = settings.out_dir / f"liver_daily_{today}.md"
     result.report_path.write_text(body, encoding="utf-8")
     result.json_path = settings.out_dir / f"liver_daily_{today}.json"
@@ -328,21 +334,25 @@ def _write_outputs(settings: Settings, result: RunResult, dm: DomainMap,
     # What `render` needs to rebuild the same outputs later.
     (settings.out_dir / f"liver_daily_{today}_run.json").write_text(
         json.dumps({"date": today, "notes": result.notes, "weekly": len(result.weekly),
-                    "wechat": wechat}, ensure_ascii=False, indent=2) + "\n",
+                    "wechat": wechat, "issue": result.issue},
+                   ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8")
     if wechat:
         article = report_wechat.wechat_html(result.daily, today, dm, notes=result.notes,
-                                            weekly_pool_size=len(result.weekly))
+                                            weekly_pool_size=len(result.weekly),
+                                            issue=result.issue)
         result.wechat_path = settings.out_dir / f"liver_daily_{today}_wechat.html"
         result.wechat_path.write_text(article, encoding="utf-8")
         # The same article as Markdown, for pasting into MDNice.
         markdown = report_md.wechat_markdown(result.daily, today, dm, notes=result.notes,
-                                             weekly_pool_size=len(result.weekly))
+                                             weekly_pool_size=len(result.weekly),
+                                             issue=result.issue)
         result.markdown_path = settings.out_dir / f"liver_daily_{today}_mdnice.md"
         result.markdown_path.write_text(markdown, encoding="utf-8")
 
 
-def judge(settings: Settings, today: str, wechat: bool | None = None) -> RunResult:
+def judge(settings: Settings, today: str, wechat: bool | None = None,
+          issue: str | None = None) -> RunResult:
     """Apply a filled judgement worksheet: re-grade, re-select, rewrite.
 
     Nothing is collected again. The candidates are the day's own file, the
@@ -372,7 +382,8 @@ def judge(settings: Settings, today: str, wechat: bool | None = None) -> RunResu
     notes.append(f"判定来自工作单：{applied} 条信号采纳，{rejected} 条丢弃")
     notes.extend(reasons)
     result = RunResult(report_date=today, daily=selection.daily,
-                       weekly=selection.weekly, collected=len(items), notes=notes)
+                       weekly=selection.weekly, collected=len(items), notes=notes,
+                       issue=issue if issue is not None else run_info.get("issue", ""))
     _, missing = translate.translate_items(result.daily, translate.NullTranslator())
     if missing:
         result.worksheet_path = settings.out_dir / f"liver_daily_{today}_renderings.json"
@@ -384,7 +395,8 @@ def judge(settings: Settings, today: str, wechat: bool | None = None) -> RunResu
     return result
 
 
-def render(settings: Settings, today: str, wechat: bool | None = None) -> RunResult:
+def render(settings: Settings, today: str, wechat: bool | None = None,
+           issue: str | None = None) -> RunResult:
     """Re-render a day's outputs after the renderings worksheet was filled in.
 
     Nothing is collected again: the items are the day's JSON, the renderings
@@ -400,7 +412,8 @@ def render(settings: Settings, today: str, wechat: bool | None = None) -> RunRes
     result = RunResult(report_date=today, daily=items,
                        weekly=[None] * int(run_info.get("weekly") or 0),  # type: ignore[list-item]
                        notes=[n for n in run_info.get("notes", [])
-                              if not n.startswith("renderings")])
+                              if not n.startswith("renderings")],
+                       issue=issue if issue is not None else run_info.get("issue", ""))
     sheet = settings.out_dir / f"liver_daily_{today}_renderings.json"
     if sheet.exists():
         accepted, rejected, reasons = worksheet.apply(items, sheet)

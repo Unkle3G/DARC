@@ -119,7 +119,8 @@ def cmd_daily(args: argparse.Namespace) -> int:
                        only=args.source.split(",") if args.source else None,
                        use_llm=not args.no_llm, write=not args.dry_run,
                        wechat=args.wechat, with_images=args.with_images,
-                       ignore_calendar=args.ignore_calendar)
+                       ignore_calendar=args.ignore_calendar,
+                       issue=args.issue)
     if result.skipped is not None:
         print(f"未运行：{result.skipped.reason}")
         return 0
@@ -146,7 +147,8 @@ def cmd_daily(args: argparse.Namespace) -> int:
 def cmd_judge(args: argparse.Namespace) -> int:
     """Re-grade and re-select a day from its filled judgement worksheet."""
     settings = _settings(args)
-    result = run_judge(settings, args.date, wechat=True if args.wechat else None)
+    result = run_judge(settings, args.date, wechat=True if args.wechat else None,
+                       issue=args.issue)
     print(f"judged {result.collected} candidate(s); daily {len(result.daily)} "
           f"{json.dumps(result.counts)}")
     for note in result.notes:
@@ -162,7 +164,8 @@ def cmd_judge(args: argparse.Namespace) -> int:
 def cmd_render(args: argparse.Namespace) -> int:
     """Rebuild a day's reports after the renderings worksheet was filled in."""
     settings = _settings(args)
-    result = render(settings, args.date, wechat=True if args.wechat else None)
+    result = render(settings, args.date, wechat=True if args.wechat else None,
+                    issue=args.issue)
     for note in result.notes:
         if note.startswith("renderings"):
             print(f"  {note}")
@@ -373,6 +376,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="download figures published by the source documents")
     p.add_argument("--allow-unverified", action="store_true",
                    help="use registry entries that have not passed verification")
+    p.add_argument("--issue", help="期号，如 003；写进刊头，后续 judge/render 沿用")
     p.add_argument("--ignore-calendar", action="store_true",
                    help="run even on a weekend or a public holiday")
     p.add_argument("--dry-run", action="store_true")
@@ -385,12 +389,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("judge", help="re-grade a day from its filled judgement worksheet")
     p.add_argument("--date", required=True)
     p.add_argument("--wechat", action="store_true")
+    p.add_argument("--issue", help="期号，如 003；不给则沿用当日 run 文件里的期号")
     p.set_defaults(func=cmd_judge)
 
     p = sub.add_parser("render", help="re-render a day's reports from its filled "
                                        "renderings worksheet")
     p.add_argument("--date", required=True)
     p.add_argument("--wechat", action="store_true")
+    p.add_argument("--issue", help="期号，如 003；不给则沿用当日 run 文件里的期号")
     p.set_defaults(func=cmd_render)
 
     p = sub.add_parser("weekly", help="drain the weekly pool into the digest")

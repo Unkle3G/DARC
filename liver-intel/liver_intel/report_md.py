@@ -30,7 +30,7 @@ from .domain_map import DomainMap
 from .images import from_meta
 from .keywords import reader_keywords
 from .models import Item, is_chinese
-from .report import WEEKDAY_ZH, coverage_window
+from .report import WEEKDAY_ZH, coverage_window, issue_label
 from .report_wechat import journal_record, normalise, provenance
 
 TRANSLATED = "编者译，仅供参考"
@@ -172,7 +172,8 @@ def sourcing_note(items: list[Item]) -> list[str]:
 def wechat_markdown(items: list[Item], report_date: str, dm: DomainMap,
                     notes: list[str] | None = None, weekly_pool_size: int = 0,
                     watermark: str = "", brand: str = BRAND,
-                    section_names: dict[str, str] | None = None) -> str:
+                    section_names: dict[str, str] | None = None,
+                    issue: str | None = None) -> str:
     """One pasteable MDNice document.
 
     ``notes`` is accepted for call-site symmetry with the other renderers and
@@ -182,11 +183,13 @@ def wechat_markdown(items: list[Item], report_date: str, dm: DomainMap,
     start, end = coverage_window(report_date)
     weekday = WEEKDAY_ZH[date.fromisoformat(report_date).weekday()]
     coverage = f"{start} 至 {end}" if start != end else end
+    label = issue_label(issue)
+    masthead = f"{brand}｜{label}｜{report_date}" if label else f"{brand}｜{report_date}"
 
     out: list[str] = []
     if watermark:
         out += [f"> **{esc(watermark)}**", ""]
-    out += [f"# {esc(brand)}｜{report_date}（{weekday}）", "",
+    out += [f"# {esc(masthead)}（{weekday}）", "",
             f"> 覆盖 {coverage}　·　本期 {len(items)} 条", ""]
 
     if not items:

@@ -26,6 +26,22 @@ from .models import Item
 WEEKDAY_ZH = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 
+def issue_label(issue: str | int | None) -> str:
+    """``第003期`` from whatever the operator wrote, or "" when there is none.
+
+    ``3``, ``003`` and ``第003期`` all name the same issue, so all three are
+    accepted and printed the same way. Anything else is printed verbatim: a
+    masthead the operator typed by hand is not the renderer's to second-guess.
+    """
+    if issue is None:
+        return ""
+    text = str(issue).strip()
+    if not text:
+        return ""
+    digits = text.strip("第期 　").strip()
+    return f"第{int(digits):03d}期" if digits.isdigit() else text
+
+
 def coverage_window(report_date: str) -> tuple[str, str]:
     """What a given day's report covers.
 
@@ -168,7 +184,8 @@ def conference_lines(report_date: str, calendar: Calendar | None = None) -> list
 
 
 def daily_markdown(items: list[Item], report_date: str, dm: DomainMap,
-                   notes: Iterable[str] = (), weekly_pool_size: int = 0) -> str:
+                   notes: Iterable[str] = (), weekly_pool_size: int = 0,
+                   issue: str | None = None) -> str:
     start, end = coverage_window(report_date)
     weekday = WEEKDAY_ZH[date.fromisoformat(report_date).weekday()]
     counts: dict[str, int] = {}
@@ -177,8 +194,10 @@ def daily_markdown(items: list[Item], report_date: str, dm: DomainMap,
 
     coverage = (f"覆盖 {start} 至 {end}" if start != end
                 else f"覆盖 {end}")
+    label = issue_label(issue)
+    issue_part = f" {label}" if label else ""
     head = [
-        f"# {BRAND} 内部日报 {report_date}（{weekday}，{coverage}）",
+        f"# {BRAND} 内部日报{issue_part} {report_date}（{weekday}，{coverage}）",
         "",
         f"> 本期 {' / '.join(f'{p} {counts[p]} 条' for p in sorted(counts)) or '无条目'}"
         f"；转入周汇总 {weekly_pool_size} 条。",

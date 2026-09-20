@@ -29,7 +29,7 @@ from .domain_map import DomainMap
 from .images import from_meta
 from .keywords import reader_keywords
 from .models import Item, is_chinese
-from .report import WEEKDAY_ZH, coverage_window
+from .report import WEEKDAY_ZH, coverage_window, issue_label
 
 #: Every font size in the article is written as ``px(n)``, so a global
 #: adjustment is one number instead of twenty scattered literals. The step is
@@ -324,12 +324,15 @@ def _conference_block(report_date: str, calendar: Calendar | None = None) -> str
 def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
                 notes: list[str] | None = None, weekly_pool_size: int = 0,
                 watermark: str = "", brand: str = BRAND,
-                section_names: dict[str, str] | None = None) -> str:
+                section_names: dict[str, str] | None = None,
+                issue: str | None = None) -> str:
     """One pasteable 公众号 article."""
     section_names = section_names or SECTION_NAMES
     start, end = coverage_window(report_date)
     weekday = WEEKDAY_ZH[date.fromisoformat(report_date).weekday()]
     coverage = f"{start} 至 {end}" if start != end else end
+    label = issue_label(issue)
+    masthead = f"{brand}｜{label}｜{report_date}" if label else f"{brand}｜{report_date}"
 
     out = [f'<div style="{WRAP}">']
     if watermark:
@@ -339,7 +342,7 @@ def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
             f'color:{ACCENT};font-weight:700;">{esc(watermark)}</div>')
 
     out.append(f'<h1 style="margin:0 0 6px;font-size:{px(22)}px;line-height:1.45;'
-               f'font-weight:700;color:{INK};">{esc(brand)}｜{esc(report_date)}'
+               f'font-weight:700;color:{INK};">{esc(masthead)}'
                f'（{esc(weekday)}）</h1>')
     out.append(f'<p style="{SMALL}">覆盖 {esc(coverage)}　·　本期 {len(items)} 条</p>')
     out.append(f'<div style="height:1px;background:{RULE};margin:16px 0 8px;"></div>')
@@ -367,7 +370,7 @@ def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
     # ``notes`` is accepted for call-site symmetry with the internal report and
     # deliberately not rendered: operator diagnostics are not reader copy.
     out.append("</div>")
-    return _document(f"{brand}｜{report_date}", "\n".join(out))
+    return _document(masthead, "\n".join(out))
 
 
 def _document(title: str, article: str) -> str:
