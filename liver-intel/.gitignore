@@ -5,6 +5,10 @@ __pycache__/
 .venv/
 
 # Runtime state and generated reports: rebuilt by the engine, never committed.
-data/state.sqlite3
-data/state.sqlite3-journal
+# The glob covers the side databases a run sometimes needs -- a copy to re-run
+# a day from, a backup taken before touching the live one -- which are the same
+# runtime state under another name.
+data/state*.sqlite3
+data/state*.sqlite3-journal
+data/state*.sqlite3.bak*
 out/
