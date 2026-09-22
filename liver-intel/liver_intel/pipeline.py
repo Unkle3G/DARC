@@ -351,14 +351,42 @@ def _write_outputs(settings: Settings, result: RunResult, dm: DomainMap,
         result.markdown_path.write_text(markdown, encoding="utf-8")
 
 
+#: Notes ``judge`` derives itself, and re-derives on every pass. A second pass
+#: has to drop the first one's or they stack: reissuing 第004期 printed the
+#: first pass's "17 处待填" directly above the second's "20 处待填". The
+#: per-item rejection reasons are matched on " 判定：" because each is prefixed
+#: with its own item key.
+_JUDGE_NOTES = ("判定来自工作单", "译文工作单", "已用当前规则重新打标")
+
+
+def _from_collection(note: str) -> bool:
+    """Whether a stored note came from the day's collection, not from a judge."""
+    return not (note.startswith(("renderings", "判定工作单", "MODEL STEP DID NOT RUN"))
+                or note.startswith(_JUDGE_NOTES) or " 判定：" in note)
+
+
 def judge(settings: Settings, today: str, wechat: bool | None = None,
-          issue: str | None = None) -> RunResult:
+          issue: str | None = None, retag: bool = False) -> RunResult:
     """Apply a filled judgement worksheet: re-grade, re-select, rewrite.
 
     Nothing is collected again. The candidates are the day's own file, the
     signals come back through the same three guards the API step applies, and
     the day's renderings worksheet is rewritten because selection may have
     changed.
+
+    ``retag`` re-reads the stored source text with the *current* tagger, for
+    reissuing a day under a rule fixed after it was collected. Grading already
+    runs on the current rules, so without it a reissue mixes new grading with
+    the tags the day happened to be collected under. It is opt-in so that
+    re-judging an old day reproduces what was published unless a reissue is
+    actually meant.
+
+    The re-tag can only **add** tags. ``Tagger.apply`` unions into
+    ``item.study``, and it has to: ctgov writes the registry's phases there,
+    pubmed writes PUBLICATION, regulator writes APPROVAL and SUBMISSION, and
+    clearing the field to re-derive it would throw those away with no way to
+    get them back. So a rule that started matching is picked up here; a veto
+    that started blocking needs the day collected again.
     """
     candidates_path = settings.out_dir / f"liver_daily_{today}_candidates.json"
     sheet = settings.out_dir / f"liver_daily_{today}_judgement.json"
@@ -368,17 +396,27 @@ def judge(settings: Settings, today: str, wechat: bool | None = None,
         raise FileNotFoundError(f"no judgement worksheet for {today}: {sheet}")
     items = [Item.from_json(raw)
              for raw in json.loads(candidates_path.read_text(encoding="utf-8"))]
+    dm = load_domain_map()
+    retag_note = ""
+    if retag:
+        before = {item.key: set(item.study) for item in items}
+        tagger = Tagger(dm)
+        for item in items:
+            tagger.apply(item)
+        changed = sum(1 for item in items if set(item.study) != before[item.key])
+        retag_note = (f"已用当前规则重新打标：{len(items)} 条中 {changed} 条标签有变动"
+                      f"（只增不减，撤销否决需重新采集）")
     applied, rejected, reasons = worksheet.apply_judgement(items, sheet)
 
-    dm = load_domain_map()
     for item in items:
         grading.apply(item, dm=dm, today=today, extra_signals=item.evidence.signals)
     selection = select.select_daily(items, cap=settings.daily_cap)
 
     run_path = settings.out_dir / f"liver_daily_{today}_run.json"
     run_info = json.loads(run_path.read_text(encoding="utf-8")) if run_path.exists() else {}
-    notes = [n for n in run_info.get("notes", [])
-             if not n.startswith(("renderings", "判定工作单", "MODEL STEP DID NOT RUN"))]
+    notes = [n for n in run_info.get("notes", []) if _from_collection(n)]
+    if retag_note:
+        notes.append(retag_note)
     notes.append(f"判定来自工作单：{applied} 条信号采纳，{rejected} 条丢弃")
     notes.extend(reasons)
     result = RunResult(report_date=today, daily=selection.daily,

@@ -148,11 +148,11 @@ def cmd_judge(args: argparse.Namespace) -> int:
     """Re-grade and re-select a day from its filled judgement worksheet."""
     settings = _settings(args)
     result = run_judge(settings, args.date, wechat=True if args.wechat else None,
-                       issue=args.issue)
+                       issue=args.issue, retag=args.retag)
     print(f"judged {result.collected} candidate(s); daily {len(result.daily)} "
           f"{json.dumps(result.counts)}")
     for note in result.notes:
-        if note.startswith(("判定", "译文")):
+        if note.startswith(("判定", "译文", "已用当前规则")):
             print(f"  {note}")
     for path in (result.report_path, result.json_path, result.wechat_path,
                  result.markdown_path, result.worksheet_path):
@@ -390,6 +390,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--date", required=True)
     p.add_argument("--wechat", action="store_true")
     p.add_argument("--issue", help="期号，如 003；不给则沿用当日 run 文件里的期号")
+    p.add_argument("--retag", action="store_true",
+                   help="用当前规则重新打标后再定级，用于按事后修好的规则重出某期；"
+                        "只增不减，撤销否决需重新采集")
     p.set_defaults(func=cmd_judge)
 
     p = sub.add_parser("render", help="re-render a day's reports from its filled "

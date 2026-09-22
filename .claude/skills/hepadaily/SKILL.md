@@ -24,6 +24,12 @@ shipped, and you fill it in. No external model, no key.
    `HepaDaily｜第003期｜<date>` in the masthead). It is remembered in the day's
    `_run.json`, so `judge` and `render` keep it.
 
+   To reissue an already-published day under a rule fixed since, add `--retag`
+   to `judge` (`judge --date <date> --issue <n> --retag`): it re-reads the
+   stored text with the current tagger instead of re-collecting, so the issue
+   keeps its own material and gains nothing new. It only *adds* tags -- undoing
+   a false positive still needs the day collected again.
+
    If a scheduled 03:00 run already collected today (out/liver_daily_<date>.json
    exists and is not empty), do **not** run `daily` again — it would find
    nothing new and the engine refuses to overwrite. Go straight to step 3 with

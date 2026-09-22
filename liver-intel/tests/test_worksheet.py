@@ -212,3 +212,84 @@ def test_judge_regrades_and_reselects_the_day(tmp_path, domain_map, monkeypatch)
     assert "PH3_RESULT" in result.daily[0].evidence.signals
     assert any("判定来自工作单：1 条信号采纳" in n for n in result.notes)
     assert result.report_path.exists()
+
+
+def test_retag_reads_the_stored_text_with_the_current_rules(tmp_path, domain_map):
+    """A day collected before a rule was fixed can be reissued under it.
+    Grading already runs on the current rules, so without this a reissue mixes
+    new grading with the tags the day happened to be collected under -- which
+    is how a cohort study in a roster journal stayed at P3 after its journal
+    was added to the roster."""
+    from dataclasses import replace as dc_replace
+
+    settings = dc_replace(pipeline.Settings(), out_dir=tmp_path,
+                          db_path=tmp_path / "s.sqlite3")
+    body = ("Madrigal reports Phase 3 MASH topline\n"
+            "The MAESTRO-NASH trial met the primary endpoint of MASH resolution.")
+    item = Item(src="newswire", title="Madrigal reports Phase 3 MASH topline",
+                url="https://www.example.com/a", date="2026-09-14", lines=["L3"],
+                P="P3", meta={"src_kind": "company", "body": body, "quotable": body})
+    (tmp_path / "liver_daily_2026-09-14_candidates.json").write_text(
+        json.dumps([item.to_json()], ensure_ascii=False), encoding="utf-8")
+    sheet = tmp_path / "liver_daily_2026-09-14_judgement.json"
+    worksheet.write_judgement([item], sheet, "2026-09-14")
+
+    # Stored with no tags at all; the tagger reads them back off the body.
+    assert item.study == []
+    plain = pipeline.judge(settings, "2026-09-14")
+    assert plain.daily == []
+
+    retagged = pipeline.judge(settings, "2026-09-14", retag=True)
+    assert [i.P for i in retagged.daily] == ["P0"]
+    assert "PH3_RESULT" in retagged.daily[0].evidence.signals
+    assert any("已用当前规则重新打标" in n for n in retagged.notes)
+
+
+def test_retag_never_drops_a_tag_a_source_wrote_itself(tmp_path, domain_map):
+    """ctgov writes the registry's phases into ``study``, pubmed writes
+    PUBLICATION, regulator writes APPROVAL -- none of it is re-derivable from
+    the text. The re-tag unions, so those survive."""
+    from dataclasses import replace as dc_replace
+
+    settings = dc_replace(pipeline.Settings(), out_dir=tmp_path,
+                          db_path=tmp_path / "s.sqlite3")
+    item = Item(src="ctgov", title="A study of something in cirrhosis",
+                url="https://www.example.com/a", date="2026-09-14",
+                study=["PHASE2", "RECRUITING"], lines=["L5"], P="P3",
+                meta={"src_kind": "registry", "body": "A study of something in cirrhosis"})
+    (tmp_path / "liver_daily_2026-09-14_candidates.json").write_text(
+        json.dumps([item.to_json()], ensure_ascii=False), encoding="utf-8")
+    worksheet.write_judgement(
+        [item], tmp_path / "liver_daily_2026-09-14_judgement.json", "2026-09-14")
+
+    result = pipeline.judge(settings, "2026-09-14", retag=True)
+    kept = {tag for i in result.daily + result.weekly for tag in i.study}
+    assert {"PHASE2", "RECRUITING"} <= kept
+
+
+def test_judging_twice_does_not_stack_the_notes(tmp_path, domain_map):
+    """A second pass re-derives every note it owns, so the first pass's copies
+    have to go. The 第004期 reissue printed the first pass's "17 处待填" right
+    above the second's "20 处待填"."""
+    from dataclasses import replace as dc_replace
+
+    settings = dc_replace(pipeline.Settings(), out_dir=tmp_path,
+                          db_path=tmp_path / "s.sqlite3")
+    item = judged()
+    (tmp_path / "liver_daily_2026-09-14_candidates.json").write_text(
+        json.dumps([item.to_json()], ensure_ascii=False), encoding="utf-8")
+    sheet = tmp_path / "liver_daily_2026-09-14_judgement.json"
+    worksheet.write_judgement([item], sheet, "2026-09-14")
+    filled = json.loads(sheet.read_text(encoding="utf-8"))
+    # A signal the guards reject, so a per-item reason is produced too.
+    filled["entries"][0]["signals"] = ["PH3_RESULT"]
+    filled["entries"][0]["quotes"] = [
+        {"signal": "PH3_RESULT", "text": "not in the source text at all", "zh": ""}]
+    sheet.write_text(json.dumps(filled, ensure_ascii=False), encoding="utf-8")
+
+    first = pipeline.judge(settings, "2026-09-14")
+    second = pipeline.judge(settings, "2026-09-14", retag=True)
+    for prefix in ("判定来自工作单", "译文工作单"):
+        assert sum(n.startswith(prefix) for n in second.notes) <= 1, prefix
+    assert sum(" 判定：" in n for n in second.notes) \
+        == sum(" 判定：" in n for n in first.notes)

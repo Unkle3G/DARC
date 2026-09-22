@@ -220,6 +220,17 @@ and no theme to install.
 `_run.json`, so a later `judge` or `render` reprints it without being told
 again; `--issue` on those two overrides it.
 
+`judge --retag` re-reads the stored source text with the **current** tagger
+before grading, for reissuing a day under a rule fixed after it was collected.
+Grading already runs on the current rules, so without it a reissue mixes new
+grading with the tags the day happened to be collected under -- which is how a
+cohort study stayed at P3 after its journal was added to the roster. It is
+opt-in, so re-judging an old day otherwise reproduces what was published. The
+re-tag can only **add** tags: ctgov writes the registry's phases into `study`,
+pubmed writes `PUBLICATION`, regulator writes `APPROVAL`, and none of it is
+re-derivable from the text. So a rule that started *matching* is picked up;
+a veto that started *blocking* needs the day collected again.
+
 * `out/liver_daily_<date>_wechat.html` — styled inline (the WeChat editor strips
   `<style>` and `<link>`), sized for the ~677px column, `charset` declared so it
   opens correctly from disk. Open it in a browser, select all, copy, paste into
