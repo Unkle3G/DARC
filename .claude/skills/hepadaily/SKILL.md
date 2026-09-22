@@ -24,6 +24,13 @@ shipped, and you fill it in. No external model, no key.
    `HepaDaily｜第003期｜<date>` in the masthead). It is remembered in the day's
    `_run.json`, so `judge` and `render` keep it.
 
+   The worksheet also holds `summary.zh`: a Chinese paragraph of at most 200
+   characters that leads the article, before the entries. Write it from the
+   `summary.items` digest in the same worksheet -- restate what shipped and
+   where it came from, and nothing else. Every number in it must already be in
+   the day's material; the engine drops the whole paragraph otherwise and says
+   why. Leave it empty and no paragraph prints.
+
    To reissue an already-published day under a rule fixed since, add `--retag`
    to `judge` (`judge --date <date> --issue <n> --retag`): it re-reads the
    stored text with the current tagger instead of re-collecting, so the issue

@@ -22,7 +22,7 @@ import json
 import logging
 import re
 import os
-from typing import Any, Protocol
+from typing import Any, Iterable, Protocol
 
 from .llm import EvaluativeLanguage, assert_not_evaluative, credential_status
 from .models import Item, _CJK, is_chinese
@@ -182,6 +182,50 @@ def _numbers_survive(source: str, rendering: str) -> bool:
             return False
         found.remove(number)
     return True
+
+
+#: How long the daily's opening summary may be, counted in non-whitespace
+#: characters so the limit does not depend on how the operator spaces it.
+SUMMARY_LIMIT = 200
+
+
+def summary_length(text: str) -> int:
+    """The summary's length as the limit counts it: non-whitespace characters."""
+    return len("".join((text or "").split()))
+
+
+def accept_summary(text: str, allowed_numbers: Iterable[str],
+                   limit: int = SUMMARY_LIMIT, where: str = "summary") -> tuple[str, str]:
+    """Accept the daily's opening summary, or say why not.
+
+    Returns ``(summary, "")`` or ``("", reason)``.
+
+    A summary is the one piece of the article that is not a translation of any
+    single source, so ``_accept``'s "every number in the source survives" has
+    nothing to run against. Inverted, it still does the work that matters: a
+    number in the summary must come from the day's own material. That is what
+    keeps a paragraph written *about* the issue from quietly inventing a figure
+    the issue never carried -- the same rule as everywhere else here, that the
+    text may restate the sources and nothing besides.
+    """
+    text = (text or "").strip()
+    if not text:
+        return "", ""                      # not filled in is not an error
+    if not _CJK.search(text):
+        return "", f"{where}：不是中文，丢弃"
+    length = summary_length(text)
+    if length > limit:
+        return "", f"{where}：{length} 字，超过 {limit} 字上限，丢弃"
+    try:
+        assert_not_evaluative(text, where)
+    except EvaluativeLanguage as exc:
+        return "", f"{where}：{exc}"
+    allowed = list(allowed_numbers)
+    for number in _NUMBERS.findall(text):
+        if number not in allowed:
+            return "", (f"{where}：出现了当日材料里没有的数字 {number!r}，丢弃"
+                        f"（总结只能复述条目，不能带入新数字）")
+    return text, ""
 
 
 def _accept(source: str, rendering: str, where: str) -> str:

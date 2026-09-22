@@ -167,7 +167,9 @@ def cmd_render(args: argparse.Namespace) -> int:
     result = render(settings, args.date, wechat=True if args.wechat else None,
                     issue=args.issue)
     for note in result.notes:
-        if note.startswith("renderings"):
+        # The 导读 notes matter as much as the rendering counts: a summary
+        # dropped for length or for an invented number must not be silent.
+        if note.startswith(("renderings", "导读")):
             print(f"  {note}")
     print(f"wrote {result.report_path}")
     print(f"wrote {result.json_path}")

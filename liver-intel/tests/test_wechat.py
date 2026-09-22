@@ -297,7 +297,8 @@ def test_stcs_render_as_a_compact_list_under_the_annual_meetings(domain_map):
     calendar = Calendar(conferences=[
         Conference(id="A", name="Annual X", kind="annual", start="2026-11-05", end="2026-11-09",
                    verified=True, abstract_close="2026-05-28"),
-        Conference(id="S", name="STC Almaty", kind="stc", start="2026-10-08", end="2026-10-09",
+        Conference(id="S", name="STC Almaty", kind="stc", society="APASL",
+                   start="2026-10-08", end="2026-10-09",
                    verified=True, location="Almaty, Kazakhstan", location_zh="哈萨克斯坦 阿拉木图")])
     block = report_wechat._conference_block("2026-09-17", calendar)
     assert "APASL 专题会（STC）" in block and "STC Almaty" in block
@@ -377,3 +378,27 @@ def test_the_issue_number_is_written_the_same_however_it_was_typed():
     assert issue_label("") == "" and issue_label(None) == ""
     # Anything that is not a plain number is the operator's own wording.
     assert issue_label("创刊号") == "创刊号"
+
+
+def test_the_summary_leads_the_article(domain_map):
+    from liver_intel import report_wechat
+    from liver_intel.models import Item
+
+    item = Item(src="pubmed", title="A paper", url="https://www.example.com/a",
+                date="2026-09-22", lines=["L3"], P="P2", meta={"src_kind": "journal"})
+    html = report_wechat.wechat_html([item], "2026-09-22", domain_map,
+                                     summary="本期一条，来自期刊。")
+    assert "本期一条，来自期刊。" in html
+    assert html.index("本期一条") < html.index("A paper")
+    assert "导读" not in report_wechat.wechat_html([item], "2026-09-22", domain_map)
+
+
+def test_the_summary_is_escaped_like_any_other_copy(domain_map):
+    from liver_intel import report_wechat
+    from liver_intel.models import Item
+
+    item = Item(src="pubmed", title="A paper", url="https://www.example.com/a",
+                date="2026-09-22", lines=["L3"], P="P2", meta={"src_kind": "journal"})
+    html = report_wechat.wechat_html([item], "2026-09-22", domain_map,
+                                     summary="本期一条 <script>alert(1)</script>")
+    assert "<script>" not in html and "&lt;script&gt;" in html

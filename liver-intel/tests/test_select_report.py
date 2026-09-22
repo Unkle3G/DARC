@@ -154,7 +154,8 @@ def test_single_topic_conferences_are_listed_but_open_no_window(domain_map):
     calendar = Calendar(conferences=[
         Conference(id="A", name="Annual", kind="annual", start="2026-11-05", end="2026-11-09",
                    verified=True),
-        Conference(id="S", name="STC Kumamoto", kind="stc", start="2026-09-18", end="2026-09-19",
+        Conference(id="S", name="STC Kumamoto", kind="stc", society="APASL",
+                   start="2026-09-18", end="2026-09-19",
                    verified=True, location="Kumamoto, Japan", location_zh="日本 熊本",
                    source_url="https://example.org/c")])
     assert calendar.active("2026-09-18") is None          # an STC never opens a window
@@ -170,3 +171,44 @@ def test_upcoming_is_not_capped_by_default(domain_map):
         Conference(id=f"C{i}", name=f"C{i}", start=f"2027-0{i}-01", end=f"2027-0{i}-02", verified=True)
         for i in range(1, 7)])
     assert len(calendar.upcoming("2026-09-17")) == 6
+
+
+def test_the_stc_heading_does_not_name_a_society_it_is_not(domain_map):
+    """It said "APASL 专题会（STC）" outright, which was true only while APASL
+    was the only society with an STC on the calendar. ASCO and ESMO both run a
+    GI symposium."""
+    from liver_intel.conference import Calendar, Conference
+    from liver_intel.report import conference_lines
+
+    def stc(cid, society):
+        return Conference(id=cid, name=f"{society} GI", kind="stc", society=society,
+                          start="2027-01-20", end="2027-01-22", verified=True)
+
+    one = Calendar(conferences=[stc("a", "APASL")])
+    assert "### APASL 专题会（STC）" in "\n".join(conference_lines("2027-01-01", one))
+
+    many = Calendar(conferences=[stc("a", "ASCO"), stc("b", "ESMO")])
+    text = "\n".join(conference_lines("2027-01-01", many))
+    assert "### 专题会议（STC）" in text
+    assert "APASL" not in text
+
+
+def test_the_summary_sits_between_the_masthead_and_the_first_item(domain_map):
+    from liver_intel.report import daily_markdown
+    from liver_intel.models import Item
+
+    item = Item(src="pubmed", title="A paper", url="https://www.example.com/a",
+                date="2026-09-22", lines=["L3"], P="P2", meta={"src_kind": "journal"})
+    text = daily_markdown([item], "2026-09-22", domain_map, summary="本期一条，来自期刊。")
+    assert "## 导读" in text
+    assert text.index("内部日报") < text.index("本期一条，来自期刊。") < text.index("A paper")
+
+
+def test_no_summary_prints_no_heading(domain_map):
+    from liver_intel.report import daily_markdown
+    from liver_intel.models import Item
+
+    item = Item(src="pubmed", title="A paper", url="https://www.example.com/a",
+                date="2026-09-22", lines=["L3"], P="P2", meta={"src_kind": "journal"})
+    for empty in (None, "", "   "):
+        assert "导读" not in daily_markdown([item], "2026-09-22", domain_map, summary=empty)

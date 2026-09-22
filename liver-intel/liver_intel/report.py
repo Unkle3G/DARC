@@ -136,6 +136,19 @@ def render_item(item: Item, dm: DomainMap, index: int) -> str:
     return "\n".join(lines)
 
 
+def _stc_heading(stcs) -> str:
+    """Heading for the single-topic conferences listed under it.
+
+    It named APASL outright while APASL was the only society with STCs on the
+    calendar. ASCO and ESMO both run a GI symposium, so the heading now follows
+    whoever is actually in the list rather than asserting a society.
+    """
+    societies = {conference.society for conference, _ in stcs if conference.society}
+    if len(societies) == 1:
+        return f"{societies.pop()} 专题会（STC）"
+    return "专题会议（STC）"
+
+
 def _place(conference) -> str:
     """", Kumamoto, Japan（日本 熊本）" -- the society's wording, then the Chinese."""
     if not conference.location:
@@ -170,7 +183,7 @@ def conference_lines(report_date: str, calendar: Calendar | None = None) -> list
             out.append(f"  - 出处：{conference.source_url}")
     if stcs:
         out.append("")
-        out.append("### APASL 专题会（STC）")
+        out.append(f"### {_stc_heading(stcs)}")
         out.append("")
         for conference, days in stcs:
             when = "进行中" if days <= 0 else f"还有 {days} 天"
@@ -185,7 +198,7 @@ def conference_lines(report_date: str, calendar: Calendar | None = None) -> list
 
 def daily_markdown(items: list[Item], report_date: str, dm: DomainMap,
                    notes: Iterable[str] = (), weekly_pool_size: int = 0,
-                   issue: str | None = None) -> str:
+                   issue: str | None = None, summary: str | None = None) -> str:
     start, end = coverage_window(report_date)
     weekday = WEEKDAY_ZH[date.fromisoformat(report_date).weekday()]
     counts: dict[str, int] = {}
@@ -205,6 +218,11 @@ def daily_markdown(items: list[Item], report_date: str, dm: DomainMap,
         "> 中文条目仅做翻译与摘录，不作推断、不补背景、不作评价。",
         "",
     ]
+    # The opening summary sits between the masthead and the first item, which is
+    # where "在详细条目之前" puts it. An empty one prints nothing at all rather
+    # than an empty heading.
+    if summary and summary.strip():
+        head += ["## 导读", "", summary.strip(), ""]
 
     body: list[str] = []
     index = 0

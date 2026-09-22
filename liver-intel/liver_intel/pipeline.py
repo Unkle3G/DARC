@@ -39,6 +39,10 @@ class RunResult:
     #: later ``judge``/``render`` keeps the number the day was published under
     #: instead of silently dropping it.
     issue: str = ""
+    #: The opening summary, written into the renderings worksheet by the
+    #: operator's session. Carried in the run file for the same reason as the
+    #: issue number: a later ``render`` must not silently drop it.
+    summary: str = ""
     #: Set when the calendar said this is not a working day and nothing ran.
     skipped: Verdict | None = None
     report_path: Path | None = None
@@ -324,7 +328,7 @@ def _write_outputs(settings: Settings, result: RunResult, dm: DomainMap,
     today = result.report_date
     body = report.daily_markdown(result.daily, today, dm, notes=result.notes,
                                  weekly_pool_size=len(result.weekly),
-                                 issue=result.issue)
+                                 issue=result.issue, summary=result.summary)
     result.report_path = settings.out_dir / f"liver_daily_{today}.md"
     result.report_path.write_text(body, encoding="utf-8")
     result.json_path = settings.out_dir / f"liver_daily_{today}.json"
@@ -334,35 +338,54 @@ def _write_outputs(settings: Settings, result: RunResult, dm: DomainMap,
     # What `render` needs to rebuild the same outputs later.
     (settings.out_dir / f"liver_daily_{today}_run.json").write_text(
         json.dumps({"date": today, "notes": result.notes, "weekly": len(result.weekly),
-                    "wechat": wechat, "issue": result.issue},
+                    "wechat": wechat, "issue": result.issue,
+                    "summary": result.summary},
                    ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8")
     if wechat:
         article = report_wechat.wechat_html(result.daily, today, dm, notes=result.notes,
                                             weekly_pool_size=len(result.weekly),
-                                            issue=result.issue)
+                                            issue=result.issue,
+                                            summary=result.summary)
         result.wechat_path = settings.out_dir / f"liver_daily_{today}_wechat.html"
         result.wechat_path.write_text(article, encoding="utf-8")
         # The same article as Markdown, for pasting into MDNice.
         markdown = report_md.wechat_markdown(result.daily, today, dm, notes=result.notes,
                                              weekly_pool_size=len(result.weekly),
-                                             issue=result.issue)
+                                             issue=result.issue,
+                                             summary=result.summary)
         result.markdown_path = settings.out_dir / f"liver_daily_{today}_mdnice.md"
         result.markdown_path.write_text(markdown, encoding="utf-8")
 
 
-#: Notes ``judge`` derives itself, and re-derives on every pass. A second pass
-#: has to drop the first one's or they stack: reissuing 第004期 printed the
-#: first pass's "17 处待填" directly above the second's "20 处待填". The
-#: per-item rejection reasons are matched on " 判定：" because each is prefixed
-#: with its own item key.
-_JUDGE_NOTES = ("判定来自工作单", "译文工作单", "已用当前规则重新打标")
+#: Notes a later ``judge`` or ``render`` derives again on every pass. Such a
+#: pass has to drop the previous one's or they stack: reissuing 第004期 printed
+#: the first pass's "17 处待填" directly above the second's "20 处待填", and a
+#: re-render printed the summary it had just rejected beside the one it took.
+#: The per-item judgement reasons are matched on " 判定：" because each is
+#: prefixed with its own item key.
+_DERIVED_NOTES = ("renderings", "判定工作单", "MODEL STEP DID NOT RUN",
+                  "判定来自工作单", "译文工作单", "已用当前规则重新打标", "导读")
+
+
+def _same_selection(settings: Settings, today: str, daily: list[Item]) -> bool:
+    """Whether this selection is the one the day's stored report already holds."""
+    json_path = settings.out_dir / f"liver_daily_{today}.json"
+    if not json_path.exists():
+        return False
+    try:
+        stored = json.loads(json_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    # ``key`` is derived from src + canonical url and is not serialised, so the
+    # stored items have to be rebuilt to be compared at all.
+    return bool(daily) and [Item.from_json(raw).key for raw in stored] == \
+        [item.key for item in daily]
 
 
 def _from_collection(note: str) -> bool:
-    """Whether a stored note came from the day's collection, not from a judge."""
-    return not (note.startswith(("renderings", "判定工作单", "MODEL STEP DID NOT RUN"))
-                or note.startswith(_JUDGE_NOTES) or " 判定：" in note)
+    """Whether a stored note came from the day's collection, not from a later pass."""
+    return not (note.startswith(_DERIVED_NOTES) or " 判定：" in note)
 
 
 def judge(settings: Settings, today: str, wechat: bool | None = None,
@@ -419,13 +442,23 @@ def judge(settings: Settings, today: str, wechat: bool | None = None,
         notes.append(retag_note)
     notes.append(f"判定来自工作单：{applied} 条信号采纳，{rejected} 条丢弃")
     notes.extend(reasons)
+    # The summary describes a particular selection, so it survives only while
+    # that selection does. A judge that changes what shipped invalidates the
+    # paragraph about it, and carrying it over would publish a description of
+    # an issue that no longer exists.
+    previous = str(run_info.get("summary") or "")
+    kept = _same_selection(settings, today, selection.daily)
+    if previous and not kept:
+        notes.append("导读已作废：本次判定改变了入选条目，请在译文工作单的 summary 里重写")
     result = RunResult(report_date=today, daily=selection.daily,
                        weekly=selection.weekly, collected=len(items), notes=notes,
-                       issue=issue if issue is not None else run_info.get("issue", ""))
+                       issue=issue if issue is not None else run_info.get("issue", ""),
+                       summary=previous if kept else "")
     _, missing = translate.translate_items(result.daily, translate.NullTranslator())
     if missing:
         result.worksheet_path = settings.out_dir / f"liver_daily_{today}_renderings.json"
-        worksheet.write(result.daily, result.worksheet_path, today)
+        worksheet.write(result.daily, result.worksheet_path, today,
+                        summary=result.summary)
         result.notes.append(f"译文工作单已按新选集重写：{missing} 处待填，"
                             f"填好后运行 `liver-intel render --date {today}`")
     _write_outputs(settings, result, dm,
@@ -450,13 +483,20 @@ def render(settings: Settings, today: str, wechat: bool | None = None,
     result = RunResult(report_date=today, daily=items,
                        weekly=[None] * int(run_info.get("weekly") or 0),  # type: ignore[list-item]
                        notes=[n for n in run_info.get("notes", [])
-                              if not n.startswith("renderings")],
-                       issue=issue if issue is not None else run_info.get("issue", ""))
+                              if _from_collection(n)],
+                       issue=issue if issue is not None else run_info.get("issue", ""),
+                       summary=str(run_info.get("summary") or ""))
     sheet = settings.out_dir / f"liver_daily_{today}_renderings.json"
     if sheet.exists():
         accepted, rejected, reasons = worksheet.apply(items, sheet)
         result.notes.append(f"renderings from worksheet: {accepted} accepted, {rejected} rejected")
         result.notes.extend(reasons)
+        summary, why = worksheet.apply_summary(items, sheet)
+        if summary:
+            result.summary = summary
+            result.notes.append(f"导读：{translate.summary_length(summary)} 字，已采用")
+        elif why:
+            result.notes.append(why)
     _, missing = translate.translate_items(items, translate.NullTranslator())
     if missing:
         result.notes.append(f"renderings still missing: {missing} -- originals stand alone")

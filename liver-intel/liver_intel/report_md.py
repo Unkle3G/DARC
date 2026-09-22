@@ -173,7 +173,7 @@ def wechat_markdown(items: list[Item], report_date: str, dm: DomainMap,
                     notes: list[str] | None = None, weekly_pool_size: int = 0,
                     watermark: str = "", brand: str = BRAND,
                     section_names: dict[str, str] | None = None,
-                    issue: str | None = None) -> str:
+                    issue: str | None = None, summary: str | None = None) -> str:
     """One pasteable MDNice document.
 
     ``notes`` is accepted for call-site symmetry with the other renderers and
@@ -191,6 +191,11 @@ def wechat_markdown(items: list[Item], report_date: str, dm: DomainMap,
         out += [f"> **{esc(watermark)}**", ""]
     out += [f"# {esc(masthead)}（{weekday}）", "",
             f"> 覆盖 {coverage}　·　本期 {len(items)} 条", ""]
+
+    # Before the entries. Plain paragraph text: a blockquote here would collide
+    # with the coverage line above it under most MDNice themes.
+    if summary and summary.strip():
+        out += [esc(summary.strip()), ""]
 
     if not items:
         out += ["## 本期", "", "今日一手源中没有达到入选门槛的条目。", ""]

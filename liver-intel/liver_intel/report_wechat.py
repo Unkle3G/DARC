@@ -29,7 +29,7 @@ from .domain_map import DomainMap
 from .images import from_meta
 from .keywords import reader_keywords
 from .models import Item, is_chinese
-from .report import WEEKDAY_ZH, coverage_window, issue_label
+from .report import WEEKDAY_ZH, _stc_heading, coverage_window, issue_label
 
 #: Every font size in the article is written as ``px(n)``, so a global
 #: adjustment is one number instead of twenty scattered literals. The step is
@@ -53,6 +53,11 @@ WRAP = (f"max-width:677px;margin:0 auto;padding:0 2px;color:{INK};"
         f"letter-spacing:.02em;word-break:break-word;")
 P = f"margin:0 0 18px;font-size:{px(16)}px;line-height:1.8;color:{INK};"
 SMALL = f"margin:0 0 10px;font-size:{px(13)}px;line-height:1.7;color:{MUTED};"
+#: The opening summary. Body size so it reads as prose rather than a
+#: caption, with a left rule and a tinted ground to set it off from the
+#: entries that follow.
+LEAD = (f"margin:0 0 26px;padding:14px 16px;border-left:3px solid {INK};"
+        f"background:#fafafa;font-size:{px(16)}px;line-height:1.85;color:{INK};")
 #: The record block: one fact per line, set tighter than body copy. Six fields
 #: joined by interpuncts wrapped into a grey slab no one could scan.
 RECORD = f"margin:0 0 4px;font-size:{px(13)}px;line-height:1.45;color:{MUTED};"
@@ -305,7 +310,7 @@ def _conference_block(report_date: str, calendar: Calendar | None = None) -> str
     if stcs:
         # Single-topic conferences: one line each, dates and place, nothing more.
         out.append(f'<p style="margin:18px 0 6px;font-size:{px(14)}px;font-weight:600;'
-                   f'color:{INK};">APASL 专题会（STC）</p>')
+                   f'color:{INK};">{_stc_heading(stcs)}</p>')
         rows = "".join(
             f'<tr>'
             f'<td style="padding:3px 12px 3px 0;color:{INK};vertical-align:top;">'
@@ -325,7 +330,7 @@ def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
                 notes: list[str] | None = None, weekly_pool_size: int = 0,
                 watermark: str = "", brand: str = BRAND,
                 section_names: dict[str, str] | None = None,
-                issue: str | None = None) -> str:
+                issue: str | None = None, summary: str | None = None) -> str:
     """One pasteable 公众号 article."""
     section_names = section_names or SECTION_NAMES
     start, end = coverage_window(report_date)
@@ -346,6 +351,11 @@ def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
                f'（{esc(weekday)}）</h1>')
     out.append(f'<p style="{SMALL}">覆盖 {esc(coverage)}　·　本期 {len(items)} 条</p>')
     out.append(f'<div style="height:1px;background:{RULE};margin:16px 0 8px;"></div>')
+
+    # Before the entries, which is where the operator asked for it. Nothing is
+    # printed when the slot is empty -- an empty lead-in is worse than none.
+    if summary and summary.strip():
+        out.append(f'<p style="{LEAD}">{esc(summary.strip())}</p>')
 
     if not items:
         out.append(_section("本期", 0))

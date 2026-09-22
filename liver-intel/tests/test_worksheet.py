@@ -293,3 +293,158 @@ def test_judging_twice_does_not_stack_the_notes(tmp_path, domain_map):
         assert sum(n.startswith(prefix) for n in second.notes) <= 1, prefix
     assert sum(" 判定：" in n for n in second.notes) \
         == sum(" 判定：" in n for n in first.notes)
+
+
+# --- the opening summary ---------------------------------------------------
+def test_the_summary_slot_travels_with_a_digest_of_what_shipped(tmp_path):
+    item = judged()
+    item.P = "P1"
+    path = tmp_path / "w.json"
+    worksheet.write([item], path, "2026-09-14")
+    block = json.loads(path.read_text(encoding="utf-8"))["summary"]
+    assert block["zh"] == "" and block["limit"] == 200
+    assert block["items"][0]["P"] == "P1"
+    assert block["items"][0]["title"] == item.title
+    assert any("不超过 200 字" in rule for rule in block["rules"])
+
+
+def test_a_summary_may_not_bring_in_a_number_the_day_never_carried(tmp_path):
+    """The one check a summary can carry: it is not a translation of any single
+    source, so "every number in the source survives" has nothing to run
+    against -- inverted, it stops a paragraph inventing a figure."""
+    item = judged()
+    path = tmp_path / "w.json"
+    worksheet.write([item], path, "2026-09-14")
+    sheet = json.loads(path.read_text(encoding="utf-8"))
+    sheet["summary"]["zh"] = "本期 1 条：MAESTRO-NASH 达到主要终点。另有 47 例入组。"
+    path.write_text(json.dumps(sheet, ensure_ascii=False), encoding="utf-8")
+    summary, why = worksheet.apply_summary([item], path)
+    assert summary == ""
+    assert "47" in why
+
+
+def test_a_summary_restating_the_day_is_accepted(tmp_path):
+    item = judged()
+    path = tmp_path / "w.json"
+    worksheet.write([item], path, "2026-09-14")
+    sheet = json.loads(path.read_text(encoding="utf-8"))
+    sheet["summary"]["zh"] = "本期 1 条，来自公司公告：MAESTRO-NASH 试验达到 MASH 缓解的主要终点。"
+    path.write_text(json.dumps(sheet, ensure_ascii=False), encoding="utf-8")
+    summary, why = worksheet.apply_summary([item], path)
+    assert why == "" and "MAESTRO-NASH" in summary
+
+
+def test_a_summary_over_the_limit_is_dropped_not_truncated(tmp_path):
+    item = judged()
+    path = tmp_path / "w.json"
+    worksheet.write([item], path, "2026-09-14")
+    sheet = json.loads(path.read_text(encoding="utf-8"))
+    sheet["summary"]["zh"] = "肝" * 201
+    path.write_text(json.dumps(sheet, ensure_ascii=False), encoding="utf-8")
+    summary, why = worksheet.apply_summary([item], path)
+    assert summary == "" and "201 字" in why and "200" in why
+
+
+def test_an_evaluative_summary_is_dropped(tmp_path):
+    item = judged()
+    path = tmp_path / "w.json"
+    worksheet.write([item], path, "2026-09-14")
+    sheet = json.loads(path.read_text(encoding="utf-8"))
+    sheet["summary"]["zh"] = "本期有一条重磅利好，值得关注。"
+    path.write_text(json.dumps(sheet, ensure_ascii=False), encoding="utf-8")
+    assert worksheet.apply_summary([item], path)[0] == ""
+
+
+def test_whitespace_does_not_buy_room_under_the_limit():
+    from liver_intel.translate import summary_length
+    assert summary_length(" 肝 病 ") == 2
+
+
+def test_a_summary_survives_render_and_is_stored_for_the_next_one(tmp_path, domain_map):
+    from dataclasses import replace as dc_replace
+
+    settings = dc_replace(pipeline.Settings(), out_dir=tmp_path,
+                          db_path=tmp_path / "s.sqlite3")
+    item = judged()
+    item.P = "P2"
+    item.lines = ["L3"]
+    (tmp_path / "liver_daily_2026-09-14.json").write_text(
+        json.dumps([item.to_json()], ensure_ascii=False), encoding="utf-8")
+    (tmp_path / "liver_daily_2026-09-14_run.json").write_text(
+        json.dumps({"date": "2026-09-14", "notes": [], "weekly": 0, "wechat": True,
+                    "issue": "第001期"}, ensure_ascii=False), encoding="utf-8")
+    sheet = tmp_path / "liver_daily_2026-09-14_renderings.json"
+    worksheet.write([item], sheet, "2026-09-14")
+    filled = json.loads(sheet.read_text(encoding="utf-8"))
+    filled["summary"]["zh"] = "本期 1 条，来自公司公告：MAESTRO-NASH 达到主要终点。"
+    sheet.write_text(json.dumps(filled, ensure_ascii=False), encoding="utf-8")
+
+    result = pipeline.render(settings, "2026-09-14")
+    assert "MAESTRO-NASH 达到主要终点" in result.summary
+    assert "MAESTRO-NASH 达到主要终点" in result.report_path.read_text(encoding="utf-8")
+    assert any("导读" in n and "已采用" in n for n in result.notes)
+    # Stored, so a later render with an emptied slot still prints it.
+    stored = json.loads((tmp_path / "liver_daily_2026-09-14_run.json")
+                        .read_text(encoding="utf-8"))
+    assert stored["summary"] == result.summary
+
+
+def test_a_judge_that_changes_the_selection_voids_the_summary(tmp_path, domain_map):
+    """The paragraph describes a particular selection. Carrying it past a judge
+    that changed what shipped would publish a description of an issue that no
+    longer exists."""
+    from dataclasses import replace as dc_replace
+
+    settings = dc_replace(pipeline.Settings(), out_dir=tmp_path,
+                          db_path=tmp_path / "s.sqlite3")
+    item = judged()
+    (tmp_path / "liver_daily_2026-09-14_candidates.json").write_text(
+        json.dumps([item.to_json()], ensure_ascii=False), encoding="utf-8")
+    # The stored report holds nothing, so any selection is a changed one.
+    (tmp_path / "liver_daily_2026-09-14.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "liver_daily_2026-09-14_run.json").write_text(
+        json.dumps({"date": "2026-09-14", "notes": [], "weekly": 0, "wechat": False,
+                    "summary": "本期 1 条。"}, ensure_ascii=False), encoding="utf-8")
+    sheet = tmp_path / "liver_daily_2026-09-14_judgement.json"
+    worksheet.write_judgement([item], sheet, "2026-09-14")
+    filled = json.loads(sheet.read_text(encoding="utf-8"))
+    filled["entries"][0]["signals"] = ["PH3_RESULT"]
+    filled["entries"][0]["quotes"] = [
+        {"signal": "PH3_RESULT",
+         "text": "The MAESTRO-NASH trial met the primary endpoint of MASH resolution.",
+         "zh": "MAESTRO-NASH 试验达到 MASH 缓解的主要终点。"}]
+    sheet.write_text(json.dumps(filled, ensure_ascii=False), encoding="utf-8")
+
+    result = pipeline.judge(settings, "2026-09-14")
+    assert result.daily and result.summary == ""
+    assert any("导读已作废" in n for n in result.notes)
+
+
+def test_rendering_twice_does_not_stack_the_summary_notes(tmp_path, domain_map):
+    """A re-render printed the summary it had just rejected beside the one it
+    took: "导读：201 字，超过 200 字上限，丢弃" above "导读：196 字，已采用"."""
+    from dataclasses import replace as dc_replace
+
+    settings = dc_replace(pipeline.Settings(), out_dir=tmp_path,
+                          db_path=tmp_path / "s.sqlite3")
+    item = judged()
+    item.P = "P2"
+    item.lines = ["L3"]
+    (tmp_path / "liver_daily_2026-09-14.json").write_text(
+        json.dumps([item.to_json()], ensure_ascii=False), encoding="utf-8")
+    (tmp_path / "liver_daily_2026-09-14_run.json").write_text(
+        json.dumps({"date": "2026-09-14", "notes": ["collected 1 item"], "weekly": 0,
+                    "wechat": False}, ensure_ascii=False), encoding="utf-8")
+    sheet = tmp_path / "liver_daily_2026-09-14_renderings.json"
+    worksheet.write([item], sheet, "2026-09-14")
+
+    def with_summary(text):
+        filled = json.loads(sheet.read_text(encoding="utf-8"))
+        filled["summary"]["zh"] = text
+        sheet.write_text(json.dumps(filled, ensure_ascii=False), encoding="utf-8")
+        return pipeline.render(settings, "2026-09-14")
+
+    with_summary("肝" * 201)                       # rejected for length
+    second = with_summary("本期 1 条，来自公司公告。")  # accepted
+    assert sum(n.startswith("导读") for n in second.notes) == 1
+    assert "collected 1 item" in second.notes      # the collection note survives

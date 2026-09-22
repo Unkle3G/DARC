@@ -220,6 +220,28 @@ and no theme to install.
 `_run.json`, so a later `judge` or `render` reprints it without being told
 again; `--issue` on those two overrides it.
 
+### The opening summary
+
+The renderings worksheet carries one more slot: `summary.zh`, a Chinese
+paragraph that prints between the masthead and the first entry, in all three
+renderings. It is capped at 200 characters, counted as non-whitespace
+characters so the limit does not move with spacing.
+
+It is the one piece of the article that is not a translation of any single
+source, so `_accept`'s "every number in the source survives" has nothing to run
+against. Inverted, it still does the work: **a number in the summary must
+already appear in the day's own material** (or be a count the engine itself
+produced, like the item total). That is what keeps a paragraph written *about*
+the issue from inventing a figure the issue never carried. The other checks are
+the usual ones -- must be Chinese, must not be evaluative. A rejected summary
+is dropped with a reason in the notes, never truncated; an empty slot prints no
+paragraph at all.
+
+The summary describes a particular selection, so `judge` keeps it only while
+the selected items are unchanged. A judge that changes what shipped voids it
+and says so, because carrying it over would publish a description of an issue
+that no longer exists.
+
 `judge --retag` re-reads the stored source text with the **current** tagger
 before grading, for reissuing a day under a rule fixed after it was collected.
 Grading already runs on the current rules, so without it a reissue mixes new

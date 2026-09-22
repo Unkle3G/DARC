@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Any
 
 from .models import Item, Quote, _normalise_ws
-from .translate import _accept, needs_rendering, quote_needs_rendering
+from .translate import (SUMMARY_LIMIT, _accept, accept_summary, needs_rendering,
+                        quote_needs_rendering)
 
 #: What the judgement worksheet asks for. Same contract as the API step in
 #: ``llm.py``: which signals the document *states*, and the sentence that states
@@ -49,6 +50,17 @@ RULES = (
     "需要向读者交代'这是什么'时，不要写注释，而是在该条目的 supplementary 里补一条引文："
     "text 必须是原文文档（source_text）中逐字存在的一句话，zh 是它的译文。引擎会核对 text "
     "确实出现在原文中，对不上的整条丢弃。",
+)
+
+#: What the opening-summary slot asks for. Same posture as everywhere else:
+#: restate what the issue carries, add nothing to it.
+SUMMARY_RULES = (
+    f"用中文写一段导读，放在详细条目之前，不超过 {SUMMARY_LIMIT} 字（按非空白字符计）。",
+    "只复述本期条目里已有的内容：写清今天有什么、分别来自哪里，不补背景、不加解释。",
+    "不预测、不评价、不排序，不写「利好」「有望」「值得关注」「重磅」这类措辞。",
+    "不要带入本期材料里没有的数字。引擎会核对，出现新数字的整段丢弃。",
+    "药名、代号、试验名、公司名、期刊名、分期写法保持原文。",
+    "一段连续文字，不用列表、不用小标题。拿不准就留空，留空则不印这一段。",
 )
 
 #: How much of the source document travels with the worksheet, so a
@@ -163,16 +175,23 @@ def apply_judgement(items: list[Item], path: Path) -> tuple[int, int, list[str]]
     return applied, rejected, reasons
 
 
-def write(items: list[Item], path: Path, report_date: str) -> int:
+def write(items: list[Item], path: Path, report_date: str,
+          summary: str = "") -> int:
     """Write the worksheet; return how many rendering slots it holds.
 
     Besides the rendering slots, every item gets a ``supplementary`` list (empty)
     and an excerpt of its source text: a quote added there must be a verbatim
     sentence of that text, which is how "explain what this is" stays inside
     "quote the source".
+
+    The ``summary`` block is the day's opening paragraph. It carries a digest of
+    what shipped -- priority, source, signals, both titles -- so the paragraph
+    can be written from the worksheet alone. ``summary`` pre-fills it, for a
+    reissue whose selection did not change; an empty slot prints no paragraph.
     """
     entries = []
     documents = []
+    digest = []
     for item in items:
         for slot in _slots(item):
             slot["item_title"] = item.title
@@ -182,10 +201,50 @@ def write(items: list[Item], path: Path, report_date: str) -> int:
             "source_text": _source_text(item)[:SOURCE_EXCERPT_CHARS],
             "supplementary": [],
         })
+        digest.append({
+            "P": item.P, "src": item.src,
+            "journal": str(item.meta.get("journal") or ""),
+            "title": item.title, "title_zh": str(item.meta.get("title_zh") or ""),
+            "signals": list(item.evidence.signals),
+        })
     payload = {"date": report_date, "rules": list(RULES), "entries": entries,
-               "documents": documents}
+               "documents": documents,
+               "summary": {"rules": list(SUMMARY_RULES), "limit": SUMMARY_LIMIT,
+                           "items": digest, "zh": summary}}
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return len(entries)
+
+
+def _allowed_numbers(items: list[Item]) -> list[str]:
+    """Every number the day's own material carries.
+
+    A summary may restate these and nothing else. Item counts are included
+    because "本期 7 条" is a fact about the issue the engine itself produced.
+    """
+    from .translate import _NUMBERS
+
+    blob = []
+    for item in items:
+        blob.append(item.title)
+        blob.append(str(item.meta.get("title_zh") or ""))
+        blob.append(_source_text(item))
+        for quote in item.evidence.quotes:
+            blob.append(quote.text)
+            blob.append(quote.translation or "")
+    numbers = _NUMBERS.findall("\n".join(blob))
+    counts = [str(len(items))]
+    for priority in ("P0", "P1", "P2", "P3"):
+        counts.append(str(sum(1 for item in items if item.P == priority)))
+    return numbers + counts
+
+
+def apply_summary(items: list[Item], path: Path) -> tuple[str, str]:
+    """Read the worksheet's opening summary. Returns (summary, reason-if-dropped)."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    block = payload.get("summary") or {}
+    limit = int(block.get("limit") or SUMMARY_LIMIT)
+    return accept_summary(str(block.get("zh") or ""), _allowed_numbers(items),
+                          limit=limit, where="导读")
 
 
 def apply(items: list[Item], path: Path) -> tuple[int, int, list[str]]:
