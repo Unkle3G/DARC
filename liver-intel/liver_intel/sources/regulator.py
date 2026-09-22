@@ -230,7 +230,10 @@ class CnRegulatorSource(BaseSource):
                 continue
             if not result.changed:
                 continue
-            title = feed.note or f"{feed.id} list page changed"
+            # Never the registry's ``note``: that field carries operator
+            # diagnostics ("verified 2026-09-16T18:11:03+00:00: probe returned
+            # 48520 bytes"), which shipped as an item's headline.
+            title = f"{feed.id} list page changed"
             item = Item(
                 src=self.id,
                 title=title,
@@ -289,7 +292,9 @@ def _items_from_listwatch(ctx: Context, source: BaseSource, feed: Any,
         return []
     return [Item(
         src=source.id,
-        title=feed.note or f"{feed.id} page changed",
+        # ``note`` is the registry's diagnostic field, not a headline -- see
+        # the comment in CnRegulatorSource.collect.
+        title=f"{feed.id} page changed",
         url=feed.url,
         date=ctx.today,
         meta={"src_kind": source.src_kind, "regulator": regulator,

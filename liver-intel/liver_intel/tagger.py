@@ -143,6 +143,18 @@ MENTION_CONTEXT = re.compile(
     r"risk of|screen(?:ing|ed)? for|to (?:assess|evaluate|investigate|study))\b"
     r"|模型|体外|体内|拟|假说")
 
+#: A paper's own section labels. Hepatotoxicity named in an INTRODUCTION or a
+#: BACKGROUND is the setup, not the finding: "INTRODUCTION: Hepatotoxicity
+#: induced by N-nitroso diethylamine (NDEA) is associated with oxidative
+#: stress..." opens a mouse study of a plant extract, and it led an issue as a
+#: P1 safety signal. A finding lives in RESULTS or CONCLUSIONS, so only the
+#: background labels veto -- and only the safety signals, since a guideline or
+#: a trial phase named in a background sentence is still that document's own
+#: subject.
+BACKGROUND_SECTION = re.compile(
+    r"(?i)^\s*(?:INTRODUCTION|BACKGROUND|BACKGROUND AND AIMS?|"
+    r"AIMS? AND BACKGROUND|OBJECTIVES? AND BACKGROUND)\s*:")
+
 #: Citing a society's guideline is not issuing one. "according to the EASL
 #: Clinical Practice Guidelines" in a paper's Background lifted a retrospective
 #: cohort study to P1.
@@ -341,7 +353,7 @@ class Tagger:
             tags = {tag for tag, pattern in self._study if pattern.search(sentence)}
             if "SUBMISSION" in tags and WITHDRAWAL_CONTEXT.search(sentence):
                 tags.discard("SUBMISSION")
-            if MENTION_CONTEXT.search(sentence):
+            if MENTION_CONTEXT.search(sentence) or BACKGROUND_SECTION.match(sentence):
                 tags -= {"DILI_SIGNAL", "SAFETY_SIGNAL"}
             if "GUIDELINE" in tags and CITATION_CONTEXT.search(sentence):
                 tags.discard("GUIDELINE")

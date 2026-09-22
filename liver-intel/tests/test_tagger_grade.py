@@ -382,3 +382,34 @@ def test_citing_a_guideline_is_not_issuing_one(tagger):
                      "hepatitis B, steatosis was defined as CAP >= 248 dB/m.")
     assert not fired("Fibrosis was staged based on the AASLD practice guidance.")
     assert fired("EASL today published its updated clinical practice guideline on MASLD.")
+
+
+def test_a_safety_word_in_a_papers_background_is_not_its_finding(domain_map):
+    """An "INTRODUCTION: Hepatotoxicity induced by NDEA..." led an issue as P1.
+
+    The paper was a plant-extract mouse study; the sentence is the setup for
+    the model, not a safety finding. A finding lives in RESULTS/CONCLUSIONS.
+    """
+    from liver_intel.tagger import Tagger
+
+    tagger = Tagger(domain_map)
+    background = ("INTRODUCTION: Hepatotoxicity induced by N-nitroso diethylamine "
+                  "(NDEA) is associated with oxidative stress, free radical "
+                  "generation, and liver function impairment.")
+    tags = {t for st in tagger.sentence_tags(background) for t in st.tags}
+    assert "DILI_SIGNAL" not in tags
+
+    # The same word in the paper's own result still counts.
+    finding = ("RESULTS: Treatment was discontinued for severe hepatotoxicity "
+               "progressing to cirrhosis.")
+    tags = {t for st in tagger.sentence_tags(finding) for t in st.tags}
+    assert "DILI_SIGNAL" in tags
+
+
+def test_a_watched_page_is_not_titled_from_the_registrys_diagnostics():
+    """AASLD's news page shipped as "verified 2026-09-16...: probe returned
+    48520 bytes" -- the verify step's own note, used as a headline."""
+    import inspect
+    from liver_intel.sources import regulator
+
+    assert "feed.note" not in inspect.getsource(regulator)
