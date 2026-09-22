@@ -140,8 +140,11 @@ MENTION_CONTEXT = re.compile(
     # "model" anyway ("a CCl4-induced model of hepatotoxicity").
     r"(?i)\b(?:model|models|modell?ing|assay|in vitro|in vivo|"
     r"we propose|proposed|hypothes\w+|potential|fear of|concern(?:s)? (?:about|over)|"
-    r"risk of|screen(?:ing|ed)? for|to (?:assess|evaluate|investigate|study))\b"
-    r"|模型|体外|体内|拟|假说")
+    r"risk of|screen(?:ing|ed)? for|to (?:assess|evaluate|investigate|study)|"
+    # The subject of the finding. "NDEA-induced hepatotoxicity in mice" is a
+    # preclinical result whatever the sentence's section label says.
+    r"in (?:mice|rats|rodents|mouse|zebrafish)|murine|albino)\b"
+    r"|模型|体外|体内|拟|假说|小鼠|大鼠")
 
 #: A paper's own section labels. Hepatotoxicity named in an INTRODUCTION or a
 #: BACKGROUND is the setup, not the finding: "INTRODUCTION: Hepatotoxicity

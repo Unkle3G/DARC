@@ -413,3 +413,23 @@ def test_a_watched_page_is_not_titled_from_the_registrys_diagnostics():
     from liver_intel.sources import regulator
 
     assert "feed.note" not in inspect.getsource(regulator)
+
+
+def test_a_finding_in_mice_is_not_a_safety_signal(domain_map):
+    """The background veto was not enough: the same paper's CONCLUSION said
+    "...against NDEA-induced hepatotoxicity in mice" and kept the P1."""
+    from liver_intel.tagger import Tagger
+
+    tagger = Tagger(domain_map)
+    mice = ("The petroleum ether extract of G. senegalensis against "
+            "NDEA-induced hepatotoxicity in mice.")
+    assert not [t for st in tagger.sentence_tags(mice) for t in st.tags]
+
+
+def test_a_genus_abbreviation_does_not_end_a_sentence():
+    """"The petroleum ether extract of G." was published as a CONCLUSION quote."""
+    from liver_intel.textutil import split_sentences
+
+    text = ("The petroleum ether extract of G. senegalensis showed "
+            "hepatoprotective activity.")
+    assert split_sentences(text) == [text]

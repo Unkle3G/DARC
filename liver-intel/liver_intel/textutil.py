@@ -159,7 +159,14 @@ def split_sentences(text: str) -> list[str]:
         head = text[start:match.start()]
         if not match.group(0).startswith("\n"):
             token = _TRAILING_TOKEN.search(head.rstrip())
-            if token and token.group(1).strip(".").lower() in _ABBREVIATIONS:
+            word = token.group(1).strip(".") if token else ""
+            if word.lower() in _ABBREVIATIONS and word:
+                continue
+            # A single capital letter before the stop is an initial or a
+            # genus abbreviation, never the end of a sentence: "The petroleum
+            # ether extract of G. senegalensis..." was quoted as "The
+            # petroleum ether extract of G."
+            if len(word) == 1 and word.isupper():
                 continue
         parts.append(head.strip())
         start = match.end()
