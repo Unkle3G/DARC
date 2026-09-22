@@ -433,3 +433,30 @@ def test_a_genus_abbreviation_does_not_end_a_sentence():
     text = ("The petroleum ether extract of G. senegalensis showed "
             "hepatoprotective activity.")
     assert split_sentences(text) == [text]
+
+
+def test_a_journal_describes_its_own_cohort_in_its_own_words(domain_map):
+    """REAL_WORLD only knew newswire phrasing, so a journal's own design
+    statement carried no clinical tag and a roster journal gave it no signal.
+    This is the JAMA Internal Medicine abstract that scored P3: 853 131
+    patients in the VA system followed to cirrhosis and HCC."""
+    from liver_intel.tagger import Tagger
+
+    tagger = Tagger(domain_map)
+    design = ("DESIGN, SETTING, AND PARTICIPANTS: This cohort study used data from "
+              "the national US Veterans Affairs health system of adults with "
+              "imaging-confirmed SLD without viral hepatitis from 2008 and 2020.")
+    assert "REAL_WORLD" in {t for st in tagger.sentence_tags(design) for t in st.tags}
+
+
+def test_a_trial_is_not_relabelled_as_routine_care(domain_map):
+    """The widened rule lists observational designs only: a trial describes
+    itself as randomised, never as a cohort study."""
+    from liver_intel.tagger import Tagger
+
+    tagger = Tagger(domain_map)
+    trial = ("This randomised, double-blind, placebo-controlled Phase 3 trial "
+             "enrolled 800 patients with biopsy-confirmed MASH.")
+    tags = {t for st in tagger.sentence_tags(trial) for t in st.tags}
+    assert "REAL_WORLD" not in tags
+    assert "PHASE3" in tags

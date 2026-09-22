@@ -55,7 +55,7 @@
     },
     "B": {
       "label": "领域主力刊，低 A 层一档",
-      "note": "经操作者确认。B 层单独不入日报，只有携带临床结果信号时才升到 P2。Nature 与 Science 由 A 层下调至此：它们每月 3–4 篇肝病论文几乎全是基础研究，留在 A 层会让一篇机制论文拿到与临床论文同级的权重；在 B 层机制论文不给信号，而它们偶尔刊出的临床试验照常命中。Ann Intern Med 与 BMJ 近 30 天肝病产出为 0，留作待命，零噪音。",
+      "note": "经操作者确认。B 层单独不入日报，只有携带临床结果信号时才升到 P2。Nature 与 Science 由 A 层下调至此：它们每月 3–4 篇肝病论文几乎全是基础研究，留在 A 层会让一篇机制论文拿到与临床论文同级的权重；在 B 层机制论文不给信号，而它们偶尔刊出的临床试验照常命中。Ann Intern Med 与 BMJ 近 30 天肝病产出为 0，留作待命，零噪音。 JAMA 系子刊经操作者点名补入 B 层：旗舰 JAMA 在 A 层，子刊是专科刊，低一档。名称与缩写均向 PubMed esummary 核对过，不是凭记忆写的。近 12 个月用本引擎的采集词实测肝病产出：JAMA Netw Open 20 篇、JAMA Intern Med 10 篇、JAMA Pediatr 7 篇、JAMA Oncol 5 篇、JAMA Surg 4 篇，与已在 B 层的 Ann Intern Med（4 篇）同量级。JAMA Cardiol 与 JAMA Psychiatry 近 36 个月肝病产出为 0、JAMA Dermatol 为 1，补进来只是名册变长，故未收。",
       "journals": [
         {
           "name": "Clinical gastroenterology and hepatology",
@@ -110,6 +110,31 @@
         {
           "name": "Science (New York, N.Y.)",
           "abbrev": "Science",
+          "named_by_operator": false
+        },
+        {
+          "name": "JAMA internal medicine",
+          "abbrev": "JAMA Intern Med",
+          "named_by_operator": false
+        },
+        {
+          "name": "JAMA network open",
+          "abbrev": "JAMA Netw Open",
+          "named_by_operator": false
+        },
+        {
+          "name": "JAMA oncology",
+          "abbrev": "JAMA Oncol",
+          "named_by_operator": false
+        },
+        {
+          "name": "JAMA surgery",
+          "abbrev": "JAMA Surg",
+          "named_by_operator": false
+        },
+        {
+          "name": "JAMA pediatrics",
+          "abbrev": "JAMA Pediatr",
           "named_by_operator": false
         }
       ]

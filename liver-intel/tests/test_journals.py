@@ -100,3 +100,21 @@ def test_the_roster_never_applies_to_a_company_release():
     item = paper("Journal of hepatology", ["PUBLICATION", "PHASE3"])
     item.meta["src_kind"] = "company"
     assert "JOURNAL_PIVOTAL" not in rule_signals(item)
+
+
+def test_a_jama_specialty_journal_sits_below_the_flagship():
+    """The operator asked for the JAMA family by tier: JAMA itself stays at A,
+    the specialty titles go to B, where a paper needs a clinical result to
+    count. A cirrhosis/HCC risk-score validation in JAMA Internal Medicine had
+    scored P3 only because the journal was off the roster entirely."""
+    from liver_intel.journals import tier_of
+
+    assert tier_of("JAMA") == "A"
+    for name in ("JAMA internal medicine", "JAMA network open", "JAMA oncology",
+                 "JAMA surgery", "JAMA pediatrics"):
+        assert tier_of(name) == "B", name
+    # Abbreviations are indexed too, since that is what some records carry.
+    assert tier_of("JAMA Intern Med") == "B"
+    # Not every sibling earns a slot: these carry no liver material at all.
+    assert tier_of("JAMA cardiology") == ""
+    assert tier_of("JAMA psychiatry") == ""

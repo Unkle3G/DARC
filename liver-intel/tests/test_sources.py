@@ -487,6 +487,37 @@ def test_hkex_title_comes_from_inside_the_pdf():
     assert _announcement_title(body) == "ASCLETIS ANNOUNCES INITIATION OF PHASE I STUDY IN U.S."
 
 
+def test_an_interim_report_is_not_read_for_an_announcement_title():
+    """Only an announcement carries an announcement title, and the disclaimer
+    is what says a document is one. Brii Biosciences' 2026 Interim Report has
+    no disclaimer; scanning it anyway took the first capitalised block and the
+    item shipped titled "CONTENTS"."""
+    from liver_intel.sources.hkex import _announcement_title
+
+    body = ("CONTENTS\n(Incorporated in the Cayman Islands with limited liability)\n"
+            "Stock Code: 2137\nBrii Biosciences Limited\n\u9a30\u76db\u535a\u85e5\u751f\u7269\u79d1\u6280\u6709\u9650\u516c\u53f8\n"
+            "2026\nInterim Report\nPage\nCorporate Profile 2\nCorporate Information 3\n")
+    assert _announcement_title(body) == ""
+
+
+def test_the_fallback_title_is_the_document_not_its_filing_category():
+    """With no title inside the PDF the item takes the exchange's own title for
+    the document ("2026 Interim Report"), not its filing category
+    ("Financial Statements/ESG Information - [Interim/Half-Year Report]")."""
+    from liver_intel.sources.hkex import parse_results
+
+    html = """<tr>
+      <td class="text-right release-time">17/09/2026 16:31</td>
+      <td class="stock-short-code">02137</td>
+      <td class="stock-short-name">BRII-B</td>
+      <td><div class="headline">Financial Statements/ESG Information - [Interim/Half-Year Report]</div>
+          <div class="doc-link"><a href="/listedco/listconews/sehk/2026/0917/2026091700444.pdf">2026 Interim Report</a></div>
+      </td></tr>"""
+    row = parse_results(html)[0]
+    assert row["doc_title"] == "2026 Interim Report"
+    assert row["headline"].startswith("Financial Statements")
+
+
 # --- openFDA sponsor lookup ------------------------------------------------
 def test_sponsor_token_matches_how_drugsfda_files_a_company():
     """drugsfda stores sponsors short and upper-cased -- MADRIGAL, GILEAD,

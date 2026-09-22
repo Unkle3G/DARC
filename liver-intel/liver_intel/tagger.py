@@ -118,8 +118,19 @@ STUDY_PATTERNS: list[tuple[str, Sequence[str], Sequence[str]]] = [
                    r"guidance on\s+\w+", r"position (?:paper|statement)",
                    r"guidance for industry", r"guideline update"],
      ["临床指南", "专家共识", "诊疗规范", "指南更新", "共识会议", "诊疗指南"]),
-    ("REAL_WORLD", [r"real-world evidence", r"real-world data", r"registry cohort"],
-     ["真实世界"]),
+    # A journal states its design in its own words, not a newswire's. The first
+    # three phrases are press-release vocabulary; a paper writes "DESIGN,
+    # SETTING, AND PARTICIPANTS: This cohort study used data from the national
+    # US Veterans Affairs health system" -- 853 131 patients followed to
+    # cirrhosis and HCC, carrying no clinical tag at all, so a roster journal
+    # gave it no signal and it scored P3. Only routine-care designs are listed:
+    # a trial describes itself as randomised, not as a cohort study.
+    ("REAL_WORLD", [r"real-world evidence", r"real-world data", r"registry cohort",
+                    r"(?:this|an?) (?:\w+[- ])?cohort study",
+                    r"population-based cohort", r"nationwide cohort",
+                    r"claims (?:data|database)", r"electronic health record",
+                    r"national (?:registry|database)"],
+     ["真实世界", "队列研究", "回顾性队列", "医保数据库"]),
 ]
 
 #: A sentence about taking an application back must not read as a filing.

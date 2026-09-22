@@ -247,7 +247,11 @@ class HkexSource(BaseSource):
             if ctx.pdf_budget > 0:
                 body = self._pdf(ctx, row["url"])
                 ctx.pdf_budget -= 1
-            title = _announcement_title(body) or headline
+            # ``doc_title`` is the document's own linked title ("2026 Interim
+            # Report"); ``headline`` is the exchange's filing category
+            # ("Financial Statements/ESG Information - [Interim/Half-Year
+            # Report]"), which is kept in meta but does not read as a headline.
+            title = _announcement_title(body) or row["doc_title"] or headline
             item = Item(
                 src=self.id, title=title, url=row["url"], date=row["date"],
                 meta={
@@ -275,11 +279,21 @@ _DISCLAIMER_END = re.compile(r"contents of this announcement\.?\s*", re.I)
 
 
 def _announcement_title(body: str) -> str:
-    """The announcement's own title, from inside the PDF."""
+    """The announcement's own title, from inside the PDF.
+
+    Only an *announcement* carries one. The disclaimer is what says the
+    document is one, so without it this reads nothing: Brii Biosciences'
+    2026 Interim Report has no disclaimer, and scanning it for the first
+    capitalised block returned its table-of-contents heading -- the item
+    shipped titled "CONTENTS". The caller falls back to the exchange's own
+    title for the document, which said "2026 Interim Report" all along.
+    """
     if not body:
         return ""
     match = _DISCLAIMER_END.search(body)
-    tail = body[match.end():] if match else body
+    if not match:
+        return ""
+    tail = body[match.end():]
     caps: list[str] = []
     for line in tail.splitlines():
         line = line.strip()
