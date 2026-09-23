@@ -460,3 +460,61 @@ def test_a_trial_is_not_relabelled_as_routine_care(domain_map):
     tags = {t for st in tagger.sentence_tags(trial) for t in st.tags}
     assert "REAL_WORLD" not in tags
     assert "PHASE3" in tags
+
+
+# --- regressions from 第005期's pool ---------------------------------------
+def test_a_reviews_recital_of_past_boxed_warnings_is_not_a_safety_signal(tagger, domain_map):
+    """The engine's first P0 was a career-retrospective review. No sentence in
+    it says "this is a review", so only the catalogue's own genre label can
+    tell it apart -- the same move NOT_NEWS makes for retraction notices."""
+    body = (
+        "Translational Hepatology From Bedside to Global Policy.\n"
+        "This review synthesizes key bedside discoveries, mechanistic studies, "
+        "prospective cohorts and landmark randomized controlled trials (RCTs) by "
+        "our team that have helped to reshape regulatory drug approvals, Boxed "
+        "Warnings, and international practice guidelines across APASL, AASLD, and EASL.\n"
+        "Third, prospective cohorts uncovered direct-acting antiviral (DAA)-induced "
+        "HBV reactivation during HCV clearance, establishing mandatory regulatory "
+        "Boxed Warnings and pre-DAA screening.")
+    i = item("Translational Hepatology From Bedside to Global Policy.",
+             src_kind="journal", body=body, publication_types=["Review"])
+    tagger.apply(i)
+    result = grade.grade(i, domain_map, today="2026-09-23")
+    assert "SAFETY_SIGNAL" not in i.study
+    assert "SAFETY_SERIOUS" not in result.signals
+    assert result.P != "P0"
+    # Still on the record as stated somewhere, just not announced here.
+    assert "SAFETY_SIGNAL" in (i.meta.get("study_mentioned") or [])
+
+
+def test_a_review_still_keeps_a_guideline(tagger, domain_map):
+    """A society consensus is routinely indexed as a Review; a blanket genre
+    veto would have silenced 中华外科杂志's HCC consensus."""
+    body = ("Expert consensus on conversion therapy for advanced hepatocellular "
+            "carcinoma. This consensus statement was revised by a multidisciplinary panel.")
+    i = item(body.split(".")[0], src_kind="journal", body=body,
+             publication_types=["Review"])
+    tagger.apply(i)
+    assert "GUIDELINE" in i.study
+
+
+def test_a_letter_about_a_consensus_is_not_a_consensus(tagger, domain_map):
+    title = ("Re: The Malaysian Society of Gastroenterology and Hepatology Consensus "
+             "Statements on Prevention and Early Detection of Hepatocellular Carcinoma.")
+    i = item(title, src_kind="journal", body=title, publication_types=["Letter"])
+    tagger.apply(i)
+    assert "GUIDELINE" not in i.study
+
+
+def test_a_finding_in_non_human_primates_is_not_a_safety_signal(tagger):
+    """The animal veto stopped at rodents, so everything larger walked through."""
+    nhp = ("In non-human primates, CRMA-1001 induced transient liver transaminase "
+           "elevations only at the highest dose tested.")
+    assert not [t for st in tagger.sentence_tags(nhp) for t in st.tags]
+
+
+def test_approved_as_an_adjective_is_not_an_approval(tagger):
+    setup = "Approved chronic hepatitis B therapies rarely result in functional cure."
+    assert "APPROVAL" not in {t for st in tagger.sentence_tags(setup) for t in st.tags}
+    real = "Vaccines that elicit adaptive immunity are approved for cancer treatment."
+    assert "APPROVAL" in {t for st in tagger.sentence_tags(real) for t in st.tags}

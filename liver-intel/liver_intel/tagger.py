@@ -66,7 +66,15 @@ STUDY_PATTERNS: list[tuple[str, Sequence[str], Sequence[str]]] = [
     ("ENROLMENT", [r"first patient (?:dosed|enrolled)", r"completed enrol(?:l)?ment",
                    r"fully enrolled"],
      ["首例受试者", "完成入组", "入组完成"]),
-    ("APPROVAL", [r"\bapproved\b", r"marketing authorisation", r"marketing authorization",
+    # A bare "approved" also reads as an adjective. "Approved chronic hepatitis
+    # B therapies rarely result in functional cure" is the sentence that sets up
+    # a gene-silencing paper, and it was tagged as an approval. So the word has
+    # to be doing something: carrying an agent, an auxiliary, or an object.
+    ("APPROVAL", [r"\b(?:was|were|is|are|has been|have been|been|newly)\s+approved\b",
+                  r"\bapproved\s+(?:by|for|in)\b",
+                  r"\b(?:fda|ema|nmpa|chmp|pmda|mhra|cde)\s+(?:has\s+|have\s+)?approved\b",
+                  r"\bapproved\s+\w+\s+for\b",
+                  r"marketing authorisation", r"marketing authorization",
                   r"\bnda approval\b", r"granted approval",
                   r"\b(?:fda|ema|nmpa|chmp|pmda|mhra)\s+approval\b"],
      ["获批", "批准上市", "上市许可", "批准注册"]),
@@ -153,9 +161,15 @@ MENTION_CONTEXT = re.compile(
     r"we propose|proposed|hypothes\w+|potential|fear of|concern(?:s)? (?:about|over)|"
     r"risk of|screen(?:ing|ed)? for|to (?:assess|evaluate|investigate|study)|"
     # The subject of the finding. "NDEA-induced hepatotoxicity in mice" is a
-    # preclinical result whatever the sentence's section label says.
-    r"in (?:mice|rats|rodents|mouse|zebrafish)|murine|albino)\b"
-    r"|模型|体外|体内|拟|假说|小鼠|大鼠")
+    # preclinical result whatever the sentence's section label says -- and the
+    # first version of this list stopped at rodents, so everything larger
+    # walked straight through: "In non-human primates, CRMA-1001 induced
+    # transient liver transaminase elevations only at the highest dose tested"
+    # shipped as a P1 safety signal.
+    r"in (?:mice|rats|rodents|mouse|zebrafish|non-human primates|primates|"
+    r"monkeys|macaques|cynomolgus|rabbits|dogs|pigs|swine|minipigs)|"
+    r"murine|albino|canine|porcine)\b"
+    r"|模型|体外|体内|拟|假说|小鼠|大鼠|恒河猴|食蟹猴|家兔")
 
 #: A paper's own section labels. Hepatotoxicity named in an INTRODUCTION or a
 #: BACKGROUND is the setup, not the finding: "INTRODUCTION: Hepatotoxicity
@@ -177,6 +191,67 @@ CITATION_CONTEXT = re.compile(
     r"in line with|consistent with|in accordance with|following the|"
     r"defined (?:by|according))\b"
     r"|根据|依据|参照|按照")
+
+#: A document describing its own scope is not reporting an event. "This review
+#: synthesizes key bedside discoveries, mechanistic studies, prospective
+#: cohorts ... and landmark randomized controlled trials (RCTs) by our team
+#: that have helped to reshape regulatory drug approvals, Boxed Warnings, and
+#: international practice guidelines across APASL, AASLD, and EASL" led an
+#: issue as the engine's first P0. The boxed warnings are what this group's
+#: past work influenced over a career, not something that happened yesterday.
+#: A review recites; it does not announce. Only the safety signals are vetoed,
+#: for the same reason as MENTION_CONTEXT: a trial phase or a guideline named
+#: by a review is still a fact about what the review covers.
+REVIEW_SCOPE = re.compile(
+    r"(?i)this (?:review|article|paper|chapter|overview|narrative review|"
+    r"systematic review)"
+    r"|the present (?:review|article|paper)"
+    r"|we (?:review|summari[sz]e|synthesi[sz]e)"
+    r"|本文综述|本综述|本文回顾")
+
+#: Correspondence *about* a document is not that document. "Re: The Malaysian
+#: Society of Gastroenterology and Hepatology Consensus Statements on
+#: Prevention and Early Detection of Hepatocellular Carcinoma in Malaysia" is a
+#: letter; it took GUIDELINE from its own title and shipped as a P1 beside the
+#: consensus it was written about.
+CORRESPONDENCE = re.compile(
+    r"(?i)^\s*(?:re|comment(?:ary)? on|comment|reply(?: to)?|response to|"
+    r"letter(?: to the editor)?|correspondence|editorial)\s*:")
+
+#: What the catalogue calls the document, and what that rules out. A review
+#: recites other people's findings; a letter comments on someone else's paper.
+#: Neither announces anything, however the prose reads -- and the prose can
+#: read exactly like an announcement: "Third, prospective cohorts uncovered
+#: direct-acting antiviral (DAA)-induced HBV reactivation during HCV clearance,
+#: establishing mandatory regulatory Boxed Warnings and pre-DAA screening" is
+#: one item of a review's numbered recital of its authors' career, and it made
+#: the engine's first P0.
+#:
+#: This is the same move as NOT_NEWS in the pubmed source: the catalogue's own
+#: label is the only honest way to tell these apart, because nothing in the
+#: sentence gives it away. The prose vetoes below still matter for sources that
+#: carry no publication type at all.
+#:
+#: A Review keeps GUIDELINE -- a society consensus is routinely indexed as one,
+#: and 中华外科杂志's HCC consensus would have been silenced by a blanket veto.
+#: Correspondence loses it, because a letter *about* a consensus is not one.
+CATALOGUE_VETO = {
+    "Review": {"DILI_SIGNAL", "SAFETY_SIGNAL"},
+    "Systematic Review": {"DILI_SIGNAL", "SAFETY_SIGNAL"},
+    "Historical Article": {"DILI_SIGNAL", "SAFETY_SIGNAL"},
+    "Letter": {"DILI_SIGNAL", "SAFETY_SIGNAL", "GUIDELINE"},
+    "Comment": {"DILI_SIGNAL", "SAFETY_SIGNAL", "GUIDELINE"},
+    "Editorial": {"DILI_SIGNAL", "SAFETY_SIGNAL", "GUIDELINE"},
+}
+
+
+def catalogue_veto(publication_types) -> set[str]:
+    """Tags the catalogue's own genre label rules out for this document."""
+    out: set[str] = set()
+    for kind in publication_types or []:
+        out |= CATALOGUE_VETO.get(str(kind).strip(), set())
+    return out
+
 
 #: Phrases that show up in drug naming; used to lift a compound name out of a
 #: headline when the release does not carry structured metadata.
@@ -367,10 +442,15 @@ class Tagger:
             tags = {tag for tag, pattern in self._study if pattern.search(sentence)}
             if "SUBMISSION" in tags and WITHDRAWAL_CONTEXT.search(sentence):
                 tags.discard("SUBMISSION")
-            if MENTION_CONTEXT.search(sentence) or BACKGROUND_SECTION.match(sentence):
+            if (MENTION_CONTEXT.search(sentence) or BACKGROUND_SECTION.match(sentence)
+                    or REVIEW_SCOPE.search(sentence)):
                 tags -= {"DILI_SIGNAL", "SAFETY_SIGNAL"}
             if "GUIDELINE" in tags and CITATION_CONTEXT.search(sentence):
                 tags.discard("GUIDELINE")
+            # A letter about a consensus carries the consensus's words in its
+            # own title, so the veto has to cover the guideline too.
+            if CORRESPONDENCE.match(sentence):
+                tags -= {"GUIDELINE", "DILI_SIGNAL", "SAFETY_SIGNAL"}
             if tags:
                 out.append(SentenceTags(sentence, tags,
                                         bool(FUTURE_TENSE.search(sentence))))
@@ -467,6 +547,15 @@ class Tagger:
 
         result = self.tag_text(blob)
         sentences = self.sentence_tags(headline_blob)
+        # A genre veto is the document's, not a sentence's: no single sentence
+        # of a review says "this is a review". Dropped tags fall through to
+        # ``study_mentioned`` below, which is exactly what they are -- stated
+        # somewhere in the document, not announced by it.
+        vetoed = catalogue_veto(item.meta.get("publication_types"))
+        if vetoed:
+            sentences = [st for st in
+                         (SentenceTags(st.text, st.tags - vetoed, st.future)
+                          for st in sentences) if st.tags]
         item.meta["sentence_tags"] = [st.to_json() for st in sentences]
         announced = sorted({tag for st in sentences for tag in st.tags})
         mentioned = sorted(set(result.study) - set(announced))
