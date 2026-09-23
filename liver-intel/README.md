@@ -209,6 +209,35 @@ python -m liver_intel.cli authors --affiliation "Capital Medical"
 
 Nothing from this table is ever rendered into an article.
 
+## Running it on a schedule
+
+The engine's continuity is in `data/state.sqlite3` -- what has been seen, what
+each registry row last said, what each watched page last hashed to. It is not
+on the code branch (runtime state, and 4.6 MB of it), and a scheduled run gets
+a fresh container with a fresh clone. Starting blank is not a degraded run, it
+is a wrong one: every paper reads as a first sighting, every trial as a first
+registration, every watched page as changed.
+
+`scripts/state_sync.sh` is what makes an unattended run possible:
+
+```bash
+scripts/state_sync.sh pull    # restore the state, and print the last issue number
+scripts/state_sync.sh push    # save the state, and record the issue just published
+scripts/state_sync.sh size    # what the state branch currently costs
+```
+
+The state rides on its own branch (`liver-intel-state`), gzipped to ~0.7 MB,
+one commit per run, chained so an ordinary push fast-forwards -- no force, and
+so no history is discarded. The issue number rides beside it in `issue.txt`,
+because `runs` records what a run *collected*, never what it was *published as*.
+
+Both directions refuse to move a database that fails `PRAGMA integrity_check`,
+so a truncated download is never installed over good state and a damaged local
+copy is never published as the good one. A missing branch is reported loudly
+rather than treated as an empty start: on any run but the first it means the
+state was lost, and the right response is to stop, not to publish an issue in
+which everything looks new.
+
 ## 公众号 output
 
 `daily --wechat` writes the reader-facing article in two forms. **The HTML is
