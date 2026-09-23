@@ -11,9 +11,13 @@
 #
 # So the state rides on its own branch, gzipped to ~0.7 MB, one commit per
 # run. The commits chain normally -- no force-push, so no history is ever
-# discarded and no permission beyond an ordinary push is needed. The cost is
-# that the branch grows by roughly the archive size each run; `prune` rewrites
-# it back to a single commit when that matters, and needs a force-push.
+# discarded and no permission beyond an ordinary push is needed.
+#
+# The cost is that the branch grows by roughly the archive size each run, about
+# 0.7 MB, so a year of weekdays is on the order of 175 MB. Collapsing it back
+# to a single commit means rewriting the branch, which needs a force-push, and
+# force-pushing is deliberately not automated here: it is the one operation
+# that can destroy the only copy of the state. Do it by hand when it matters.
 #
 #   state_sync.sh pull    restore data/state.sqlite3 from the branch
 #   state_sync.sh push    save data/state.sqlite3 onto the branch
@@ -111,8 +115,8 @@ PY
 size)
     git fetch -q origin "$BRANCH" 2>/dev/null || { echo "state_sync: no '$BRANCH' branch"; exit 0; }
     commits="$(git rev-list --count FETCH_HEAD)"
-    echo "state_sync: '$BRANCH' holds $commits commit(s)"
-    echo "state_sync: roughly $(( commits * 7 / 10 )) MB of archives; run 'prune' to collapse to one"
+    echo "state_sync: '$BRANCH' holds $commits commit(s), roughly $(( commits * 7 / 10 )) MB of archives"
+    echo "state_sync: collapsing it to one commit is a manual force-push -- see the header"
     ;;
 *)
     echo "usage: state_sync.sh {pull|push|size}" >&2; exit 2 ;;
