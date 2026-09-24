@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+
+# Runtime state and generated reports: rebuilt by the engine, never committed.
+# The glob covers the side databases a run sometimes needs -- a copy to re-run
+# a day from, a backup taken before touching the live one -- which are the same
+# runtime state under another name.
+data/state*.sqlite3
+data/state*.sqlite3-journal
+data/state*.sqlite3.bak*
+out/
