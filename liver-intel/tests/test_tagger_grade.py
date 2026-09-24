@@ -518,3 +518,100 @@ def test_approved_as_an_adjective_is_not_an_approval(tagger):
     assert "APPROVAL" not in {t for st in tagger.sentence_tags(setup) for t in st.tags}
     real = "Vaccines that elicit adaptive immunity are approved for cancer treatment."
     assert "APPROVAL" in {t for st in tagger.sentence_tags(real) for t in st.tags}
+
+
+def test_correspondence_in_a_roster_journal_earns_no_tier_signal():
+    """第006期 shipped one NEJM correspondence exchange as three P2 entries.
+
+    Two letters and the authors' reply about bepirovirsen, all three titled
+    "Bepirovirsen Treatment for Chronic Hepatitis B Virus Infection.", each
+    carrying nothing but the roster's own JOURNAL_MAJOR: no result, no signal
+    of its own, and the journal saying only where the letter was printed. The
+    genre vetoes in the tagger cannot reach that signal -- the grader awards it
+    from the roster, not from the text -- so the suppression lives where the
+    tier is read.
+    """
+    it = Item(src="pubmed",
+              title="Bepirovirsen Treatment for Chronic Hepatitis B Virus Infection. Reply.",
+              url="https://pubmed.ncbi.nlm.nih.gov/42777251/",
+              date="2026-09-24",
+              meta={"src_kind": "journal",
+                    "journal": "The New England journal of medicine",
+                    "publication_types": ["Comment", "Letter"],
+                    "sentence_tags": [{"tags": ["PUBLICATION"], "future": False}]},
+              lines=["L1"], study=["PUBLICATION"])
+    assert grade.rule_signals(it) == []
+    assert grade.grade(it).P == "P3", "correspondence must not compete for a daily slot"
+
+
+def test_a_result_in_the_same_journal_still_earns_its_tier():
+    """The suppression is about the genre, not about the journal."""
+    it = Item(src="pubmed",
+              title="Bepirovirsen in Chronic Hepatitis B: a Phase 3 Randomised Trial",
+              url="https://pubmed.ncbi.nlm.nih.gov/42777000/",
+              date="2026-09-24",
+              meta={"src_kind": "journal",
+                    "journal": "The New England journal of medicine",
+                    "publication_types": ["Journal Article", "Randomized Controlled Trial"],
+                    "sentence_tags": [{"tags": ["PUBLICATION", "PHASE3"], "future": False}]},
+              lines=["L1"], study=["PUBLICATION", "PHASE3"])
+    assert "JOURNAL_PIVOTAL" in grade.rule_signals(it)
+
+
+def test_ethics_committee_approval_is_not_a_regulatory_approval(tagger):
+    """A terminated berberine Phase 2 explained itself into an APPROVAL.
+
+    Verbatim from NCT03198572's own record: the trial had just stopped for slow
+    accrual, and the clause saying so carried the word.
+    """
+    tags = {tag for st in tagger.sentence_tags(
+        "Why stopped: Enrolment terminated early owing to slow accrual "
+        "(repeat-biopsy burden and COVID-19 pandemic), following a "
+        "protocol-specified interim analysis approved by the ethics "
+        "committee (2017-050(5)).") for tag in st.tags}
+    assert "APPROVAL" not in tags
+
+
+def test_a_regulator_approving_a_product_still_reads_as_an_approval(tagger):
+    tags = {tag for st in tagger.sentence_tags(
+        "The FDA approved Rezdiffra for noncirrhotic MASH with moderate to "
+        "advanced fibrosis.") for tag in st.tags}
+    assert "APPROVAL" in tags
+
+
+def test_chinese_ethics_approval_is_vetoed_too(tagger):
+    tags = {tag for st in tagger.sentence_tags(
+        "本研究方案经医院伦理委员会批准后开始入组。") for tag in st.tags}
+    assert "APPROVAL" not in tags
+
+
+def test_a_review_about_guideline_updates_is_not_a_guideline(tagger):
+    """第006期 led with a review because two words of its title said so.
+
+    "MASLD: Established Knowledge and Emerging Directions - Guideline Updates."
+    in Zeitschrift für Gastroenterologie, filed by the catalogue as a Review,
+    graded P1 "Society guideline or consensus statement". The phrase names a
+    topic here, not a document.
+    """
+    tags = {tag for st in tagger.sentence_tags(
+        "MASLD: Established Knowledge and Emerging Directions - Guideline "
+        "Updates.") for tag in st.tags}
+    assert "GUIDELINE" not in tags
+
+
+def test_a_society_guideline_still_reads_as_one(tagger):
+    for text in ("EASL Clinical Practice Guidelines on the management of ascites.",
+                 "AASLD practice guidance on the clinical assessment of MASLD.",
+                 "中华医学会外科学分会发布肝细胞癌诊疗指南更新。"):
+        tags = {tag for st in tagger.sentence_tags(text) for tag in st.tags}
+        assert "GUIDELINE" in tags, text
+
+
+def test_an_aga_clinical_practice_update_reads_as_a_guideline(tagger):
+    """Verbatim from the AGA's MetALD update, which carried no signal at all."""
+    tags = {tag for st in tagger.sentence_tags(
+        "The purpose of this American Gastroenterological Association (AGA) "
+        "Clinical Practice Update expert review is to provide Best Practice "
+        "Advice regarding the diagnosis, staging, and treatment of MetALD.")
+        for tag in st.tags}
+    assert "GUIDELINE" in tags

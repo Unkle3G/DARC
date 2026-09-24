@@ -120,11 +120,21 @@ STUDY_PATTERNS: list[tuple[str, Sequence[str], Sequence[str]]] = [
     # output was announced as a "Consensus Conference" issuing "updated
     # guidance" and "clinical recommendations", and matched none of the
     # original three phrases.
+    # "guideline update" is gone from the English list: it names a *topic* as
+    # often as a document. A German review titled "MASLD: Established Knowledge
+    # and Emerging Directions - Guideline Updates." led 第006期 as a society
+    # guideline on the strength of those two words, and the catalogue files it
+    # as a Review. A real update still matches on "clinical practice guideline"
+    # or names its society. 指南更新 stays: in a Chinese journal title it is
+    # nearly always the updated guideline itself, not an article about one.
+    # "clinical practice update" and "best practice advice" are how the AGA
+    # issues guidance, and the AGA's MetALD update carried no signal at all.
     ("GUIDELINE", [r"clinical practice guideline", r"practice guidance",
                    r"consensus (?:statement|conference|document|report)",
                    r"clinical recommendations", r"updated guidance",
                    r"guidance on\s+\w+", r"position (?:paper|statement)",
-                   r"guidance for industry", r"guideline update"],
+                   r"guidance for industry",
+                   r"clinical practice update", r"best practice advice"],
      ["临床指南", "专家共识", "诊疗规范", "指南更新", "共识会议", "诊疗指南"]),
     # A journal states its design in its own words, not a newswire's. The first
     # three phrases are press-release vocabulary; a paper writes "DESIGN,
@@ -253,6 +263,24 @@ def catalogue_veto(publication_types) -> set[str]:
     return out
 
 
+#: A letter to the editor is not a publication of a result, so the journal it
+#: appeared in says nothing about it. 第006期 came out of the engine with three
+#: P2 entries that were one NEJM correspondence exchange -- two letters and the
+#: authors' reply about bepirovirsen, all three titled the same, none carrying
+#: any signal but the roster's own JOURNAL_MAJOR. The genre vetoes above cannot
+#: reach that signal, because the grader awards it from the roster rather than
+#: from the text, so the suppression has to happen where the tier is read.
+#: Correspondence still collects and still reaches the weekly pool; it just
+#: stops competing for a daily slot, exactly as an off-roster journal does.
+CORRESPONDENCE_TYPES = frozenset({"Letter", "Comment", "Editorial"})
+
+
+def is_correspondence(publication_types) -> bool:
+    """True when the catalogue files this document as correspondence."""
+    return any(str(kind).strip() in CORRESPONDENCE_TYPES
+               for kind in publication_types or [])
+
+
 #: Phrases that show up in drug naming; used to lift a compound name out of a
 #: headline when the release does not carry structured metadata.
 #: A space-separated code needs three digits ("MK 3475"); two letters and two
@@ -264,6 +292,18 @@ _NOT_A_CODE = {"EN", "ON", "IN", "AT", "NO", "OF", "TO", "BY", "OR", "AN", "AS",
 _INN_SUFFIX = re.compile(
     r"\b([a-z][a-z\-]{4,}(?:tide|mab|nib|stat|siran|vir|prazole|fexor|glitazar|"
     r"delpar|branor|rasib|ciclib|zumab|ximab|umab))\b", re.I)
+
+
+#: An ethics committee approving a protocol is not a regulator approving a
+#: product. A terminated berberine Phase 2 explained itself with "following a
+#: protocol-specified interim analysis approved by the ethics committee
+#: (2017-050(5))", and that one clause put APPROVAL on a trial that had just
+#: stopped for slow accrual.
+ETHICS_APPROVAL = re.compile(
+    r"approved\s+by\s+(?:an?|the)?\s*(?:\w+[\s-]+){0,3}"
+    r"(?:ethics|ethical|institutional\s+review\s+board|irb|review\s+board|"
+    r"data\s+(?:and\s+)?safety\s+monitoring|dsmb)\b"
+    r"|伦理(?:委员会)?(?:审查|批准|通过|同意)", re.I)
 
 
 #: A statement about something that has not happened yet is not an event.
@@ -451,6 +491,8 @@ class Tagger:
             # own title, so the veto has to cover the guideline too.
             if CORRESPONDENCE.match(sentence):
                 tags -= {"GUIDELINE", "DILI_SIGNAL", "SAFETY_SIGNAL"}
+            if "APPROVAL" in tags and ETHICS_APPROVAL.search(sentence):
+                tags.discard("APPROVAL")
             if tags:
                 out.append(SentenceTags(sentence, tags,
                                         bool(FUTURE_TENSE.search(sentence))))

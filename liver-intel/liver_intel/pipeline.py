@@ -426,9 +426,19 @@ def judge(settings: Settings, today: str, wechat: bool | None = None,
         tagger = Tagger(dm)
         for item in items:
             tagger.apply(item)
+            # The stored signals are the *previous* run's, rules included, and
+            # they were being handed back to the grader as ``extra_signals`` --
+            # the slot meant for a model's or the worksheet's findings. So a
+            # rule tightened since was outvoted by its own earlier verdict:
+            # three NEJM letters kept the JOURNAL_MAJOR that the roster had
+            # just stopped awarding them, and --retag looked like it did
+            # nothing. Under --retag the rules speak fresh and only the
+            # worksheet carries findings.
+            item.evidence.signals = []
         changed = sum(1 for item in items if set(item.study) != before[item.key])
-        retag_note = (f"已用当前规则重新打标：{len(items)} 条中 {changed} 条标签有变动"
-                      f"（只增不减，撤销否决需重新采集）")
+        retag_note = (f"已用当前规则重新打标：{len(items)} 条中 {changed} 条 study 标签有变动"
+                      f"（study 只增不减；句级标签会重算，所以规则里的否决也会生效）；"
+                      f"上一次的信号一律作废，只认当前规则与工作单")
     applied, rejected, reasons = worksheet.apply_judgement(items, sheet)
 
     for item in items:

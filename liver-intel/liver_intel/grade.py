@@ -17,6 +17,7 @@ from .config import MAIN_LINES
 from .domain_map import DomainMap, load_cached
 from .journals import tier_of
 from .models import Item
+from .tagger import is_correspondence
 
 #: The closed signal vocabulary.  ``hard`` signals are P0 on their own; ``soft``
 #: signals are P1.  The LLM step may only emit ids from this table.
@@ -152,6 +153,9 @@ def _journal_signals(item: Item, study: set[str]) -> list[str]:
     for a daily slot.
     """
     if item.meta.get("src_kind") != "journal":
+        return []
+    # Correspondence is not a result, so where it appeared carries no weight.
+    if is_correspondence(item.meta.get("publication_types")):
         return []
     tier = tier_of(str(item.meta.get("journal") or ""))
     if not tier:
