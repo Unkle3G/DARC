@@ -11,4 +11,5 @@ __pycache__/
 data/state*.sqlite3
 data/state*.sqlite3-journal
 data/state*.sqlite3.bak*
+data/state*.sqlite3.replaced
 out/
