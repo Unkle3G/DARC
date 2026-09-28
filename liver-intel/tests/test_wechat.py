@@ -2,7 +2,7 @@ import re
 
 from liver_intel.images import ImageCandidate, extract_images
 from liver_intel.models import Item, Quote
-from liver_intel.report_wechat import wechat_html
+from liver_intel.report_wechat import preview_html, wechat_article, wechat_html
 
 
 def make(priority="P0", lines=("L3",), title="Phase 3 topline",
@@ -386,11 +386,11 @@ def test_the_summary_leads_the_article(domain_map):
 
     item = Item(src="pubmed", title="A paper", url="https://www.example.com/a",
                 date="2026-09-22", lines=["L3"], P="P2", meta={"src_kind": "journal"})
-    html = report_wechat.wechat_html([item], "2026-09-22", domain_map,
+    html = wechat_html([item], "2026-09-22", domain_map,
                                      summary="本期一条，来自期刊。")
     assert "本期一条，来自期刊。" in html
     assert html.index("本期一条") < html.index("A paper")
-    assert "导读" not in report_wechat.wechat_html([item], "2026-09-22", domain_map)
+    assert "导读" not in wechat_html([item], "2026-09-22", domain_map)
 
 
 def test_the_summary_is_escaped_like_any_other_copy(domain_map):
@@ -399,6 +399,45 @@ def test_the_summary_is_escaped_like_any_other_copy(domain_map):
 
     item = Item(src="pubmed", title="A paper", url="https://www.example.com/a",
                 date="2026-09-22", lines=["L3"], P="P2", meta={"src_kind": "journal"})
-    html = report_wechat.wechat_html([item], "2026-09-22", domain_map,
+    html = wechat_html([item], "2026-09-22", domain_map,
                                      summary="本期一条 <script>alert(1)</script>")
     assert "<script>" not in html and "&lt;script&gt;" in html
+
+
+def test_the_preview_carries_no_document_skeleton(domain_map):
+    """The artifact host supplies doctype, head and body; we must not.
+
+    A second document nested inside the first is not a page, so the preview
+    fragment starts at <title>.
+    """
+    html = preview_html([make(priority="P1")], "2026-09-28", domain_map, issue="007")
+    for tag in ("<!DOCTYPE", "<html", "<head", "<body"):
+        assert tag.lower() not in html.lower(), tag
+    assert html.startswith("<title>")
+    # The host paints its own ground behind the page, so the shell has to paint
+    # an explicit one of its own.
+    assert "background: var(--page)" in html
+    assert "color-scheme: light" in html
+
+
+def test_the_preview_and_the_pasteable_file_hold_the_same_article(domain_map):
+    """The preview is a wrapper, not a second renderer.
+
+    Whatever the operator reads in the browser has to be what lands in the
+    editor, character for character.
+    """
+    items = [make(priority="P1"), make(priority="P2", title="Resmetirom in MASH")]
+    kwargs = dict(issue="007", summary="今日两条。")
+    masthead, article = wechat_article(
+        items, "2026-09-28", domain_map, **kwargs)
+    assert article in wechat_html(
+        items, "2026-09-28", domain_map, **kwargs)
+    assert article in preview_html(
+        items, "2026-09-28", domain_map, **kwargs)
+    assert masthead in preview_html(
+        items, "2026-09-28", domain_map, **kwargs)
+
+
+def test_the_preview_title_names_the_issue(domain_map):
+    html = preview_html([make(priority="P1")], "2026-09-28", domain_map, issue="007")
+    assert "<title>HepaDaily｜第007期｜2026-09-28</title>" in html

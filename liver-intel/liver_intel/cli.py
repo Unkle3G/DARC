@@ -135,6 +135,8 @@ def cmd_daily(args: argparse.Namespace) -> int:
         print(f"wrote {result.wechat_path}  (paste into the WeChat editor)")
     if result.markdown_path:
         print(f"wrote {result.markdown_path}  (paste into MDNice)")
+    if result.preview_path:
+        print(f"wrote {result.preview_path}  (publish this one to preview in a browser)")
     if result.judgement_path:
         print(f"wrote {result.judgement_path}  (fill signals/quotes, then: "
               f"liver-intel judge --date {result.report_date})")
@@ -155,7 +157,7 @@ def cmd_judge(args: argparse.Namespace) -> int:
         if note.startswith(("判定", "译文", "已用当前规则")):
             print(f"  {note}")
     for path in (result.report_path, result.json_path, result.wechat_path,
-                 result.markdown_path, result.worksheet_path):
+                 result.markdown_path, result.preview_path, result.worksheet_path):
         if path:
             print(f"wrote {path}")
     return 0
@@ -177,6 +179,8 @@ def cmd_render(args: argparse.Namespace) -> int:
         print(f"wrote {result.wechat_path}")
     if result.markdown_path:
         print(f"wrote {result.markdown_path}")
+    if result.preview_path:
+        print(f"wrote {result.preview_path}")
     return 0
 
 

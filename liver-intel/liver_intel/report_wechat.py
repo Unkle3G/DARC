@@ -326,12 +326,18 @@ def _conference_block(report_date: str, calendar: Calendar | None = None) -> str
     return "".join(out)
 
 
-def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
-                notes: list[str] | None = None, weekly_pool_size: int = 0,
-                watermark: str = "", brand: str = BRAND,
-                section_names: dict[str, str] | None = None,
-                issue: str | None = None, summary: str | None = None) -> str:
-    """One pasteable 公众号 article."""
+def wechat_article(items: list[Item], report_date: str, dm: DomainMap,
+                   notes: list[str] | None = None, weekly_pool_size: int = 0,
+                   watermark: str = "", brand: str = BRAND,
+                   section_names: dict[str, str] | None = None,
+                   issue: str | None = None,
+                   summary: str | None = None) -> tuple[str, str]:
+    """The masthead and the article ``<div>``: what gets copied into the editor.
+
+    Split out of ``wechat_html`` so the same markup can be wrapped twice -- once
+    as a file to open from disk, once as a browser preview -- without either
+    wrapper being able to change a character of the article.
+    """
     section_names = section_names or SECTION_NAMES
     start, end = coverage_window(report_date)
     weekday = WEEKDAY_ZH[date.fromisoformat(report_date).weekday()]
@@ -380,7 +386,39 @@ def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
     # ``notes`` is accepted for call-site symmetry with the internal report and
     # deliberately not rendered: operator diagnostics are not reader copy.
     out.append("</div>")
-    return _document(masthead, "\n".join(out))
+    return masthead, "\n".join(out)
+
+
+def wechat_html(items: list[Item], report_date: str, dm: DomainMap,
+                notes: list[str] | None = None, weekly_pool_size: int = 0,
+                watermark: str = "", brand: str = BRAND,
+                section_names: dict[str, str] | None = None,
+                issue: str | None = None, summary: str | None = None) -> str:
+    """One pasteable 公众号 article."""
+    masthead, article = wechat_article(
+        items, report_date, dm, notes=notes, weekly_pool_size=weekly_pool_size,
+        watermark=watermark, brand=brand, section_names=section_names,
+        issue=issue, summary=summary)
+    return _document(masthead, article)
+
+
+def preview_html(items: list[Item], report_date: str, dm: DomainMap,
+                 notes: list[str] | None = None, weekly_pool_size: int = 0,
+                 watermark: str = "", brand: str = BRAND,
+                 section_names: dict[str, str] | None = None,
+                 issue: str | None = None, summary: str | None = None) -> str:
+    """The same article as a page to read in a browser, before publishing.
+
+    The operator asked to see the issue by opening a link instead of downloading
+    a file. This is that page, and it carries no document skeleton: the artifact
+    host supplies ``<!doctype>``, ``<head>`` and ``<body>``, so the fragment
+    starts at ``<title>``.
+    """
+    masthead, article = wechat_article(
+        items, report_date, dm, notes=notes, weekly_pool_size=weekly_pool_size,
+        watermark=watermark, brand=brand, section_names=section_names,
+        issue=issue, summary=summary)
+    return _preview_document(masthead, article)
 
 
 def _document(title: str, article: str) -> str:
@@ -397,3 +435,58 @@ def _document(title: str, article: str) -> str:
             '<html lang="zh-CN">\n<head>\n<meta charset="utf-8"/>\n'
             '<meta name="viewport" content="width=device-width,initial-scale=1"/>\n'
             f"<title>{esc(title)}</title>\n</head>\n<body>\n{article}\n</body>\n</html>\n")
+
+
+#: The preview commits to one light look on purpose. Its whole job is to show
+#: what the 公众号 will show, and the article's colours are inline and light --
+#: 公众号 has no dark mode to mirror. So the shell paints an explicit light
+#: ground and pins ``color-scheme: light`` rather than offering a dark palette
+#: the article underneath would ignore. The measure matches the editor's own
+#: 677px so line breaks in the preview are the line breaks readers will get.
+PREVIEW_CSS = """
+:root {
+  color-scheme: light;
+  --page: #f2f1ee;
+  --sheet: #ffffff;
+  --edge: #e2e0da;
+  --meta: #6f6c66;
+}
+body {
+  margin: 0;
+  background: var(--page);
+  padding: 24px 16px 56px;
+}
+.sheet {
+  max-width: 677px;
+  margin: 0 auto;
+  background: var(--sheet);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+  padding: 28px 22px 34px;
+}
+.shelf {
+  max-width: 677px;
+  margin: 0 auto 12px;
+  font: 500 11px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--meta);
+}
+@media (max-width: 480px) {
+  body { padding: 16px 16px 40px; }
+  .sheet { padding: 20px 16px 26px; }
+}
+"""
+
+
+def _preview_document(title: str, article: str) -> str:
+    """Wrap the article for the artifact host, which supplies the skeleton.
+
+    No ``<!doctype>``, ``<html>``, ``<head>`` or ``<body>`` of our own: the host
+    adds those, and a second document nested inside the first is not a page.
+    """
+    return (f"<title>{esc(title)}</title>\n"
+            f"<style>{PREVIEW_CSS}</style>\n"
+            f'<p class="shelf">公众号预览 · 未发布</p>\n'
+            f'<main class="sheet">\n{article}\n</main>\n')

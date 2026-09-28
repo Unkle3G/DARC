@@ -49,6 +49,7 @@ class RunResult:
     json_path: Path | None = None
     wechat_path: Path | None = None
     markdown_path: Path | None = None
+    preview_path: Path | None = None
     worksheet_path: Path | None = None
     judgement_path: Path | None = None
 
@@ -356,6 +357,15 @@ def _write_outputs(settings: Settings, result: RunResult, dm: DomainMap,
                                              summary=result.summary)
         result.markdown_path = settings.out_dir / f"liver_daily_{today}_mdnice.md"
         result.markdown_path.write_text(markdown, encoding="utf-8")
+        # The same article again, as a page to read in a browser before it is
+        # published anywhere. It carries no document skeleton: an artifact host
+        # supplies that, and the operator reads the issue from a link.
+        preview = report_wechat.preview_html(result.daily, today, dm, notes=result.notes,
+                                             weekly_pool_size=len(result.weekly),
+                                             issue=result.issue,
+                                             summary=result.summary)
+        result.preview_path = settings.out_dir / f"liver_daily_{today}_preview.html"
+        result.preview_path.write_text(preview, encoding="utf-8")
 
 
 #: Notes a later ``judge`` or ``render`` derives again on every pass. Such a
