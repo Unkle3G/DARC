@@ -79,7 +79,15 @@ shipped, and you fill it in. No external model, no key.
    the source text was changed). Fix and re-run `render` until nothing is
    rejected that should not be.
 
-5. Hand over `out/liver_daily_<date>_wechat.html` — **this is the one the
+5. Publish `out/liver_daily_<date>_preview.html` with the Artifact tool and give
+   the operator the link first: that is how they read the issue — a link, not a
+   download. Pass a one-sentence `description` (issue number, the P counts, the
+   coverage window) and, on a first publish, `icon: "newspaper"`. The file is
+   already artifact-shaped: it carries no document skeleton, because the host
+   supplies one. Publishing the preview is not publishing the article — it is a
+   private page for the operator to check before anything goes out.
+
+   Then hand over `out/liver_daily_<date>_wechat.html` — **this is the one the
    operator publishes from**. It is a complete page: charset declared, every
    style inline (the WeChat editor strips stylesheets), so it opens in a
    browser, and select-all-copy lands in the WeChat editor with its formatting
