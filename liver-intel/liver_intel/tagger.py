@@ -53,9 +53,16 @@ STUDY_PATTERNS: list[tuple[str, Sequence[str], Sequence[str]]] = [
     ("BIOPSY_ENDPOINT", [r"liver biopsy", r"biopsy-confirmed", r"fibrosis improvement",
                          r"nash resolution", r"mash resolution"],
      ["肝活检", "纤维化改善", "脂肪性肝炎缓解"]),
+    # SAFETY_SIGNAL is what makes a P0 ("Death, Hy's law case or boxed warning"),
+    # so it has to name an event, not a topic. "safety signal" named the topic:
+    # "Orlistat-Associated Gastrointestinal, Hepatobiliary, Pancreatic, and
+    # Anorectal Safety Signals: A FAERS Disproportionality ... Study" led 第007期
+    # as a P0 on its title alone, with no other evidence in the entry. Same for
+    # 安全性信号. A pharmacovigilance paper still collects and still reaches the
+    # weekly pool; it just stops being read as a serious case.
     ("SAFETY_SIGNAL", [r"serious adverse event", r"treatment-related death", r"black box",
-                       r"boxed warning", r"safety signal"],
-     ["严重不良事件", "死亡病例", "黑框警告", "安全性信号"]),
+                       r"boxed warning"],
+     ["严重不良事件", "死亡病例", "黑框警告"]),
     ("DILI_SIGNAL", [r"drug-induced liver injury", r"hy's law", r"alt elevation",
                      r"transaminase elevation", r"hepatotoxicity"],
      ["药物性肝损伤", "转氨酶升高", "肝毒性", "海氏法则"]),
@@ -306,6 +313,54 @@ ETHICS_APPROVAL = re.compile(
     r"|伦理(?:委员会)?(?:审查|批准|通过|同意)", re.I)
 
 
+#: A sentence that denies the finding is not the finding. 第007期 came out of the
+#: engine with four P0 entries, three of which said the opposite of what they
+#: were graded on: "No virological breakthrough, relapse, treatment
+#: discontinuation, or serious adverse events were observed." and "No
+#: significant safety signals were observed regarding hepatotoxicity,
+#: susceptibility to infections, or interactions with concomitant
+#: immunosuppressive therapy." Both became SAFETY_SERIOUS -- "Death, Hy's law
+#: case or boxed warning" -- off sentences reporting that nothing happened.
+#:
+#: Kept deliberately narrow: the denial has to open the sentence, or be an
+#: explicit "did not / were not ... observed", and an adversative anywhere in
+#: the sentence cancels the veto, because "No deaths occurred, but three
+#: patients met Hy's law" is a finding.
+NEGATED_FINDING = re.compile(
+    r"(?i)"
+    r"^\s*(?:no|none|neither)\b[^.]*?\b(?:were|was|are|is)\s+"
+    r"(?:observed|reported|seen|noted|detected|found|identified|recorded)\b"
+    r"|\b(?:did|do|does)\s+not\s+(?:observe|report|show|reveal|find|identify|"
+    r"demonstrate)\b"
+    r"|\b(?:were|was)\s+not\s+(?:observed|reported|seen|noted|detected|found)\b"
+    r"|\bno\s+(?:evidence|cases?|episodes?|instances?)\s+of\b"
+    r"|\bwithout\s+(?:any\s+)?(?:serious adverse events?|treatment-related "
+    r"deaths?|hepatotoxicity|drug-induced liver injury)\b"
+    r"|未(?:见|观察到|出现|发生|报告)|无(?:严重不良事件|死亡病例|肝毒性)")
+
+#: An adversative reopens the sentence: the denial covers one clause and a real
+#: finding may follow it.
+ADVERSATIVE = re.compile(r"(?i)\b(?:but|however|whereas|although|though|except|"
+                         r"aside from|apart from|with the exception)\b|但|然而|除外")
+
+#: Saying that no recommendation can be made is not a guideline. A review wrote
+#: "precluding technology-specific recommendations for MASLD management" and was
+#: graded "Society guideline or consensus statement" at P1.
+NO_RECOMMENDATION = re.compile(
+    r"(?i)"
+    r"\bprecluding\b[^.]*\brecommendations?\b"
+    r"|\bno\s+(?:specific\s+|formal\s+)?recommendations?\s+(?:can|could|be)\b"
+    r"|\b(?:cannot|can not|could not|insufficient evidence to)\s+recommend\b"
+    r"|\brecommendations?\s+(?:cannot|could not)\s+be\s+made\b"
+    # Calling for recommendations is not issuing them. The sentence the splitter
+    # handed the tagger ended "...studies ... are needed to establish causality
+    # and define evidence-based clinical recommendations", and that last phrase
+    # is verbatim one of GUIDELINE's own patterns.
+    r"|\b(?:are|is|will be)\s+needed\s+to\b[^.]*\brecommendations?\b"
+    r"|\bto\s+(?:establish|define|inform|develop)\b[^.]*\brecommendations?\s*$"
+    r"|尚(?:不|无法)(?:能)?推荐|无法给出推荐|有待(?:制定|建立)")
+
+
 #: A statement about something that has not happened yet is not an event.
 FUTURE_TENSE = re.compile(
     r"(?i)\b(?:expected|expects?|anticipat\w+|plans? to|planned|will\s+\w+|"
@@ -493,6 +548,10 @@ class Tagger:
                 tags -= {"GUIDELINE", "DILI_SIGNAL", "SAFETY_SIGNAL"}
             if "APPROVAL" in tags and ETHICS_APPROVAL.search(sentence):
                 tags.discard("APPROVAL")
+            if NEGATED_FINDING.search(sentence) and not ADVERSATIVE.search(sentence):
+                tags -= {"SAFETY_SIGNAL", "DILI_SIGNAL"}
+            if "GUIDELINE" in tags and NO_RECOMMENDATION.search(sentence):
+                tags.discard("GUIDELINE")
             if tags:
                 out.append(SentenceTags(sentence, tags,
                                         bool(FUTURE_TENSE.search(sentence))))

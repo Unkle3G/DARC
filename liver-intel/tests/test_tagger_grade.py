@@ -615,3 +615,81 @@ def test_an_aga_clinical_practice_update_reads_as_a_guideline(tagger):
         "Advice regarding the diagnosis, staging, and treatment of MetALD.")
         for tag in st.tags}
     assert "GUIDELINE" in tags
+
+
+def test_a_sentence_that_denies_the_finding_is_not_the_finding(tagger):
+    """第007期 came out with four P0 entries; three said the opposite.
+
+    SAFETY_SIGNAL is what makes a P0 -- "Death, Hy's law case or boxed warning"
+    -- and these two sentences, verbatim from the day's material, report that
+    nothing happened.
+    """
+    for text in (
+        "No virological breakthrough, relapse, treatment discontinuation, or "
+        "serious adverse events were observed.",
+        "No significant safety signals were observed regarding hepatotoxicity, "
+        "susceptibility to infections, or interactions with concomitant "
+        "immunosuppressive therapy.",
+    ):
+        tags = {tag for st in tagger.sentence_tags(text) for tag in st.tags}
+        assert "SAFETY_SIGNAL" not in tags, text
+        assert "DILI_SIGNAL" not in tags, text
+
+
+def test_a_real_serious_event_still_reads_as_one(tagger):
+    tags = {tag for st in tagger.sentence_tags(
+        "Three patients had treatment-related deaths.") for tag in st.tags}
+    assert "SAFETY_SIGNAL" in tags
+
+
+def test_an_adversative_cancels_the_negation(tagger):
+    """"No deaths occurred, but three patients met Hy's law" is a finding.
+
+    The veto is deliberately narrow: one clause denying something does not make
+    the whole sentence a denial.
+    """
+    tags = {tag for st in tagger.sentence_tags(
+        "No deaths occurred, but three patients met Hy's law criteria.")
+        for tag in st.tags}
+    assert "DILI_SIGNAL" in tags
+
+
+def test_a_paper_about_safety_signals_is_not_a_serious_case(tagger):
+    """Verbatim title of a FAERS disproportionality study that led 第007期 as P0.
+
+    Its only evidence was its own title. "safety signal" names the subject of
+    pharmacovigilance, not an event; the phrases that name an event -- serious
+    adverse event, treatment-related death, boxed warning -- still fire.
+    """
+    tags = {tag for st in tagger.sentence_tags(
+        "Orlistat-Associated Gastrointestinal, Hepatobiliary, Pancreatic, and "
+        "Anorectal Safety Signals: A FAERS Disproportionality and Regulatory "
+        "Label Concordance Study.") for tag in st.tags}
+    assert "SAFETY_SIGNAL" not in tags
+
+
+def test_calling_for_recommendations_is_not_issuing_them(tagger):
+    """A review graded "Society guideline or consensus statement" at P1.
+
+    This is the chunk the sentence splitter actually handed the tagger, two
+    sentences run together, verbatim from 第007期's material. It says
+    recommendations are precluded and that studies are needed to define them --
+    and it ends on "evidence-based clinical recommendations", which is verbatim
+    one of GUIDELINE's own patterns.
+    """
+    tags = {tag for st in tagger.sentence_tags(
+        "However, current evidence regarding potential hepatic benefits remains "
+        "limited and indirect, precluding technology-specific recommendations "
+        "for MASLD prevention or treatment in T1D. Adequately powered, "
+        "prospective randomized studies with standardized imaging-based hepatic "
+        "outcomes are needed to establish causality and define evidence-based "
+        "clinical recommendations.") for tag in st.tags}
+    assert "GUIDELINE" not in tags
+
+
+def test_a_call_for_future_recommendations_is_vetoed_on_its_own(tagger):
+    tags = {tag for st in tagger.sentence_tags(
+        "Adequately powered, prospective randomized studies are needed to "
+        "establish causality and define evidence-based clinical "
+        "recommendations.") for tag in st.tags}
+    assert "GUIDELINE" not in tags
