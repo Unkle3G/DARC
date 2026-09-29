@@ -1,6 +1,6 @@
 import re
 
-from liver_intel.images import ImageCandidate, extract_images
+from liver_intel.images import ImageCandidate, extract_images, from_meta
 from liver_intel.models import Item, Quote
 from liver_intel.report_wechat import preview_html, wechat_article, wechat_html
 
@@ -37,6 +37,41 @@ def test_social_image_ranks_first():
 def test_tiny_and_furniture_images_are_dropped():
     urls = [c.url for c in extract_images(HTML, "https://www.example.com/news/a")]
     assert not any("logo" in u or "pixel" in u or u.endswith(".svg") for u in urls)
+
+
+# The three images PR Newswire attached to Viking's 2026-09-28 release, as
+# collected. None is the release's own: rt.gif is a read-tracking beacon served
+# as zero bytes (it printed as a blank 源文档配图 in 第008期), the PNG is the
+# site's share widget, and BIO.jpg is the stock picture under every biotech
+# release.
+PRN_RELEASE = ("https://www.prnewswire.com/news-releases/viking-therapeutics-announces-"
+               "closing-of-concurrent-upsized-offerings-302891919.html")
+PRN_FURNITURE = [
+    "https://rt.prnewswire.com/rt.gif?NewsItemId=LA58434&Transmission_Id="
+    "202609281630PR_NEWS_USPR_____LA58434&DateId=20260928",
+    "https://www.prnewswire.com/content/dam/newWidget-desktop.png",
+    "https://www.prnewswire.com/content/dam/prnewswire/subject-and-industry-code-images/BIO.jpg",
+]
+
+
+def test_wire_furniture_is_not_a_figure():
+    html = "<body>" + "".join(f'<img src="{u}">' for u in PRN_FURNITURE) + "</body>"
+    assert extract_images(html, PRN_RELEASE) == []
+
+
+def test_stored_wire_furniture_is_dropped_on_render():
+    """Items collected before the rule still carry the beacon in their meta."""
+    meta = {"images": [{"url": u, "role": "body", "source_url": PRN_RELEASE}
+                       for u in PRN_FURNITURE]}
+    assert from_meta(meta) == []
+
+
+def test_one_picture_under_two_query_strings_is_one_image():
+    base = "https://mmx.prnewswire.com/media/MS1994359/Long-Island-University-x-Jon-Ledecky.jpg"
+    html = (f'<head><meta name="twitter:image" content="{base}?id=OA2965011&p=twitter">'
+            f'<meta property="og:image" content="{base}?id=OA2965011&p=facebook"></head>')
+    assert [c.url for c in extract_images(html, PRN_RELEASE)] == [
+        f"{base}?id=OA2965011&p=twitter"]
 
 
 def body_of(article: str) -> str:

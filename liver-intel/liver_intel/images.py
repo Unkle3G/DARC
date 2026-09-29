@@ -29,6 +29,13 @@ _FURNITURE = re.compile(
     r"(?i)(logo|icon|favicon|sprite|avatar|badge|button|banner[-_]?ad|"
     r"pixel|spacer|tracking|1x1|beacon|footer|header[-_]?bg)")
 
+#: Wire-service furniture whose filename gives nothing away: PR Newswire's
+#: read-tracking beacon (``rt.gif``, served as zero bytes), its share widget,
+#: and the stock picture it attaches by industry code -- the same
+#: "Biotechnology" image under every biotech release, not the document's own.
+_WIRE_FURNITURE = re.compile(
+    r"(?i)(/rt\.gif$|widget|/subject-and-industry-code-images/)")
+
 _ALLOWED_EXT = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 
 
@@ -89,11 +96,18 @@ def _plausible(url: str, width: int | None, height: int | None) -> bool:
         return False
     if path and not path.endswith(_ALLOWED_EXT) and "." in path.rsplit("/", 1)[-1]:
         return False
-    if _FURNITURE.search(url):
+    if _FURNITURE.search(url) or _WIRE_FURNITURE.search(path):
         return False
     if (width and width < 200) or (height and height < 150):
         return False
     return True
+
+
+def _same_image(url: str) -> str:
+    """One picture served under several query strings (PR Newswire hands out
+    ``?p=twitter`` and ``?p=facebook`` copies of the same file) is one image."""
+    parts = urlparse(url)
+    return f"{parts.netloc.lower()}{parts.path}"
 
 
 def extract_images(html: str, base_url: str, limit: int = 3) -> list[ImageCandidate]:
@@ -110,17 +124,17 @@ def extract_images(html: str, base_url: str, limit: int = 3) -> list[ImageCandid
 
     for src, alt in parser.social:
         url = urljoin(base_url, src)
-        if url in seen or not _plausible(url, None, None):
+        if _same_image(url) in seen or not _plausible(url, None, None):
             continue
-        seen.add(url)
+        seen.add(_same_image(url))
         out.append(ImageCandidate(url=url, alt=alt, source_url=base_url, role="social"))
 
     for entry in parser.body:
         url = urljoin(base_url, entry["src"])
         width, height = _as_int(entry["width"]), _as_int(entry["height"])
-        if url in seen or not _plausible(url, width, height):
+        if _same_image(url) in seen or not _plausible(url, width, height):
             continue
-        seen.add(url)
+        seen.add(_same_image(url))
         out.append(ImageCandidate(url=url, alt=entry["alt"], source_url=base_url,
                                   width=width, height=height))
     return out[:limit]
@@ -157,8 +171,16 @@ def download(candidates: list[ImageCandidate], fetcher: Any, out_dir: Path,
 
 
 def from_meta(meta: dict[str, Any]) -> list[ImageCandidate]:
-    out = []
+    """Stored candidates, re-checked against the current rules: items collected
+    before a rule was tightened still carry what it now rejects."""
+    out: list[ImageCandidate] = []
+    seen: set[str] = set()
     for raw in meta.get("images") or []:
-        out.append(ImageCandidate(**{k: v for k, v in raw.items()
-                                     if k in ImageCandidate.__dataclass_fields__}))
+        candidate = ImageCandidate(**{k: v for k, v in raw.items()
+                                      if k in ImageCandidate.__dataclass_fields__})
+        key = _same_image(candidate.url)
+        if key in seen or not _plausible(candidate.url, candidate.width, candidate.height):
+            continue
+        seen.add(key)
+        out.append(candidate)
     return out
