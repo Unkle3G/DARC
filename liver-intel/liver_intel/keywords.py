@@ -84,6 +84,11 @@ def reader_keywords(item: Item, dm: DomainMap, limit: int = 8) -> list[str]:
     for drug in (item.meta.get("drugs") or [])[:2]:
         add(str(drug))
     for tag in item.study:
+        # On a registry record TOPLINE means the sponsor posted results to the
+        # registry, not a company's topline announcement.
+        if tag == "TOPLINE" and item.meta.get("src_kind") == "registry":
+            add("结果已公布")
+            continue
         add(STUDY_TAG_ZH.get(tag))
     if item.meta.get("conference"):
         add(str(item.meta["conference"]))

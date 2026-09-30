@@ -176,7 +176,7 @@ def test_registry_record_opens_with_its_sponsor(domain_map):
     item.evidence.quotes = [Quote(text="awaiting agreement with Sponsor",
                                   locator="ClinicalTrials.gov · whyStopped")]
     article = wechat_html([item], "2026-09-14", domain_map)
-    record = article[article.index("leadSponsor"):article.index("whyStopped")]
+    record = article[article.index("申办方"):article.index("终止原因")]
     assert "Roswell Park Cancer Institute" in record
     assert "出处：Roswell Park Cancer Institute · ClinicalTrials.gov" in article
     assert "Roswell Park Cancer Institute</span>" in article      # keyword chip too
@@ -296,7 +296,8 @@ def test_registry_fields_render_as_a_record_not_pull_quotes(domain_map):
         Quote(text="Business Reasons", locator="ClinicalTrials.gov · whyStopped"),
     ]
     article = wechat_html([item], "2026-09-14", domain_map)
-    assert "overallStatus：" in article and "TERMINATED" in article
+    assert "试验状态：" in article and "TERMINATED" in article
+    assert "overallStatus" not in article         # API keys are not reader labels
     assert "<blockquote" not in article
 
 
@@ -382,7 +383,7 @@ def test_the_record_block_is_one_fact_per_line_and_entries_are_ruled(domain_map)
     html = wechat_html([first, second], "2026-09-14", domain_map)
 
     assert html.count(f'<p style="{RECORD}">') == 3      # sponsor + 2 fields
-    assert f'<p style="{RECORD}">leadSponsor：' in html
+    assert f'<p style="{RECORD}">申办方：' in html
     assert "　·　overallStatus" not in html              # no longer one run-on line
     # A rule before every entry but the first, across the section break too.
     assert html.count(ENTRY_RULE) == 1
@@ -476,3 +477,51 @@ def test_the_preview_and_the_pasteable_file_hold_the_same_article(domain_map):
 def test_the_preview_title_names_the_issue(domain_map):
     html = preview_html([make(priority="P1")], "2026-09-28", domain_map, issue="007")
     assert "<title>HepaDaily｜第007期｜2026-09-28</title>" in html
+
+
+# --- registry results -----------------------------------------------------
+# From 第009期: NCT05014087 showed "TERMINATED / 23 (ACTUAL)" under API field
+# names, tagged 顶线数据, with none of the results the registry had just posted.
+def digoxin_entry(with_results=True):
+    import json
+    from pathlib import Path
+    from liver_intel.sources.ctgov import results_summary
+    record = json.loads((Path(__file__).parent / "data" / "ctgov_NCT05014087.json").read_text())
+    item = Item(src="ctgov", title="Digoxin In Treatment of Alcohol Associated Hepatitis",
+                url="https://clinicaltrials.gov/study/NCT05014087", date="2026-09-30",
+                study=["PHASE2", "TERMINATED", "TOPLINE"], P="P1", score=7.0,
+                meta={"src_kind": "registry", "sponsor": "Yale University",
+                      "overall_status": "TERMINATED", "first_sighting": True,
+                      "results_first_posted": "2026-09-29", "last_update_posted": "2026-09-29",
+                      "start_date": "2021-10-08", "primary_completion": "2025-06-22"})
+    if with_results:
+        item.meta["results"] = results_summary(record)
+    item.evidence.quotes = [Quote(text="Slow accrual", locator="ClinicalTrials.gov · whyStopped")]
+    return item
+
+
+def test_a_registry_entry_says_what_changed_and_when(domain_map):
+    article = wechat_html([digoxin_entry()], "2026-09-30", domain_map)
+    assert "本条变化：" in article and "ClinicalTrials.gov 于 2026-09-29 首次公布结果" in article
+    assert "开始 2021-10-08，主要完成 2025-06-22" in article
+    assert "终止原因：" in article and "whyStopped" not in article
+
+
+def test_posted_results_are_shown_as_the_registry_numbers(domain_map):
+    article = wechat_html([digoxin_entry()], "2026-09-30", domain_map)
+    assert "主要终点结果：Change in Biomarkers of Inflammation" in article
+    assert "Arm A: Digoxin（n=13）" in article and "Arm B: No Digoxin（n=10）" in article
+    assert "-255.75 ± 44.66" in article and "47.16 ± 38.40" in article
+    assert "净均值差 -302.92，p = 0.0148" in article
+    assert "Arm A: Digoxin 1/13；Arm B: No Digoxin 4/10" in article
+    assert "描述性分析" in article and "未经同行评审" in article
+
+
+def test_a_registry_posting_is_not_called_topline(domain_map):
+    article = wechat_html([digoxin_entry()], "2026-09-30", domain_map)
+    assert "结果已公布" in article and "顶线数据" not in article
+
+
+def test_results_that_could_not_be_fetched_are_said_so(domain_map):
+    article = wechat_html([digoxin_entry(with_results=False)], "2026-09-30", domain_map)
+    assert "本期未能取回数值" in article

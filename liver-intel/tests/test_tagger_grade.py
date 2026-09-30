@@ -712,3 +712,22 @@ def test_hepatotoxicity_in_a_patient_is_still_a_signal(tagger):
     assert dili(tagger, "Despite 6 months of azole therapy, treatment was discontinued for "
                         "severe hepatotoxicity progressing to cirrhosis, and the patient "
                         "subsequently died from septic shock.")
+
+
+# --- disease lines ----------------------------------------------------------
+# NCT05014087's condition list, as the registry wrote it (第009期 tagged the
+# alcohol-hepatitis trial MASH on the strength of the word "steatohepatitis").
+DIGOXIN_CONDITIONS = ("Digoxin In Treatment of Alcohol Associated Hepatitis\n"
+                      "Conditions: Acute Alcoholic Hepatitis, Chemical and Drug Induced "
+                      "Liver Injury, Alcohol-Induced Disorders, Steatohepatitis Caused by "
+                      "Ingestible Alcohol")
+
+
+def test_alcoholic_steatohepatitis_is_not_mash(tagger):
+    lines, _ = tagger.tag_lines(DIGOXIN_CONDITIONS)
+    assert "L3" not in lines and "L7" in lines
+
+
+def test_metabolic_steatohepatitis_is_still_mash(tagger):
+    lines, _ = tagger.tag_lines("Resmetirom in noncirrhotic steatohepatitis with fibrosis")
+    assert "L3" in lines

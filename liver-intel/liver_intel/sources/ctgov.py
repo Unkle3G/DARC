@@ -50,6 +50,9 @@ FIELDS = (
     # number is itself the news.
     "InterventionName", "EnrollmentCount", "EnrollmentType",
     "PrimaryOutcomeMeasure",
+    # When it ran. "Results posted today" of a trial that finished last year
+    # reads very differently from one that stopped this week.
+    "StartDate",
 )
 
 
@@ -81,6 +84,8 @@ class CtGovSource(BaseSource):
                 seen_nct.add(nct)
                 item = self._diff_to_item(ctx, study, window_start)
                 if item is not None:
+                    if "TOPLINE" in item.study:
+                        self._attach_results(ctx, feed.url, item)
                     items.append(item)
         ctx.note(f"[{self.id}] examined {len(seen_nct)} studies, "
                  f"{len(items)} had a reportable state change")
@@ -122,6 +127,27 @@ class CtGovSource(BaseSource):
             if not token:
                 break
         return out
+
+    def _attach_results(self, ctx: Context, base_url: str, item: Item) -> None:
+        """The posted results themselves, not only the fact that they were posted.
+
+        The search endpoint returns no results section, so an entry announced
+        "results posted" and then showed the enrolment count -- a reader could
+        not tell what the trial found. One extra request per posting fetches the
+        full record; every number kept is the registry's own string.
+        """
+        nct = item.meta.get("nct_id")
+        url = f"{base_url.rstrip('/')}/{nct}?format=json"
+        try:
+            response = ctx.fetcher.get(url, allow_304=False)
+            summary = results_summary(response.json()) if response.ok else None
+        except Exception as exc:
+            ctx.note(f"[{self.id}] results for {nct} could not be fetched: {exc}")
+            return
+        if summary and (summary["primary"] or summary["adverse"]):
+            item.meta["results"] = summary
+        else:
+            ctx.note(f"[{self.id}] {nct}: results posted but none could be read")
 
     # -- state diffing ----------------------------------------------------
     def _diff_to_item(self, ctx: Context, study: dict[str, Any],
@@ -176,6 +202,8 @@ class CtGovSource(BaseSource):
                 "conditions": study.get("conditions"),
                 "last_update_posted": current.last_update_posted,
                 "results_first_posted": current.results_first_posted,
+                "start_date": study.get("start_date"),
+                "primary_completion": study.get("primary_completion"),
                 "state_changes": change_text,
                 "first_sighting": first_sighting,
                 # ``body`` feeds the tagger and carries engine-written scaffolding
@@ -276,6 +304,11 @@ def _flatten(study: dict[str, Any]) -> dict[str, Any]:
         "results_first_posted": as_iso_date(
             (status.get("resultsFirstPostDateStruct") or {}).get("date")
             or study.get("ResultsFirstPostDate")),
+        "start_date": as_iso_date((status.get("startDateStruct") or {}).get("date")
+                                  or study.get("StartDate")),
+        "primary_completion": as_iso_date(
+            (status.get("primaryCompletionDateStruct") or {}).get("date")
+            or study.get("PrimaryCompletionDate")),
         "phase": ", ".join(phases) if phases else study.get("Phase"),
         "sponsor": sponsor.get("name") or study.get("LeadSponsorName"),
         "conditions": conditions or study.get("Condition") or [],
@@ -286,3 +319,74 @@ def _flatten(study: dict[str, Any]) -> dict[str, Any]:
                       if enrolment.get("count") is not None else ""),
         "primary_outcome": "; ".join(filter(None, outcomes)),
     }
+
+
+def _measurement(m: dict[str, Any]) -> str:
+    """One posted value with its spread, as the registry wrote the numbers."""
+    value = str(m.get("value") or "").strip()
+    if m.get("spread"):
+        return f"{value} ± {m['spread']}"
+    if m.get("lowerLimit") or m.get("upperLimit"):
+        return f"{value} ({m.get('lowerLimit', '')} to {m.get('upperLimit', '')})"
+    return value
+
+
+def results_summary(record: dict[str, Any]) -> dict[str, Any]:
+    """Primary outcomes and serious-event counts from a full v2 study record.
+
+    Only fields the registry posted, as its own strings: group and outcome
+    titles, measurements, the analyses' p-values and estimates. Nothing is
+    computed here -- a between-group difference appears only if the sponsor
+    posted one.
+    """
+    section = record.get("resultsSection") or {}
+    primary: list[dict[str, Any]] = []
+    for measure in (section.get("outcomeMeasuresModule") or {}).get("outcomeMeasures") or []:
+        if measure.get("type") != "PRIMARY":
+            continue
+        counts = {}
+        for denom in measure.get("denoms") or []:
+            if (denom.get("units") or "").lower() == "participants":
+                counts = {c.get("groupId"): c.get("value") for c in denom.get("counts") or []}
+        analyses = {}
+        for analysis in measure.get("analyses") or []:
+            key = (analysis.get("groupDescription") or "").strip()
+            analyses.setdefault(key, []).append({
+                "estimate_type": analysis.get("paramType"),
+                "estimate": analysis.get("paramValue"),
+                "p": analysis.get("pValue"),
+                "method": analysis.get("statisticalMethod"),
+                "comment": analysis.get("nonInferiorityComment"),
+            })
+        rows = []
+        for cls in measure.get("classes") or []:
+            for category in cls.get("categories") or [{}]:
+                label = " · ".join(filter(None, [cls.get("title"), category.get("title")]))
+                rows.append({
+                    "label": label,
+                    "values": {m.get("groupId"): _measurement(m)
+                               for m in category.get("measurements") or []},
+                    "analyses": analyses.pop(label, []) if label else [],
+                })
+        primary.append({
+            "title": measure.get("title"),
+            "time_frame": measure.get("timeFrame"),
+            "unit": measure.get("unitOfMeasure"),
+            "param": measure.get("paramType"),
+            "dispersion": measure.get("dispersionType"),
+            "groups": [{"id": g.get("id"), "title": g.get("title"),
+                        "n": counts.get(g.get("id"))} for g in measure.get("groups") or []],
+            "rows": rows,
+            # Analyses not tied to one row (a single overall comparison).
+            "analyses": [a for rest in analyses.values() for a in rest],
+        })
+    adverse = []
+    for group in (section.get("adverseEventsModule") or {}).get("eventGroups") or []:
+        adverse.append({
+            "title": group.get("title"),
+            "serious": group.get("seriousNumAffected"),
+            "serious_at_risk": group.get("seriousNumAtRisk"),
+            "deaths": group.get("deathsNumAffected"),
+            "deaths_at_risk": group.get("deathsNumAtRisk"),
+        })
+    return {"primary": primary, "adverse": adverse}

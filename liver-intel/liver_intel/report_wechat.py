@@ -204,6 +204,129 @@ def journal_record(item: Item) -> list[tuple[str, str]]:
     return out
 
 
+
+#: Reader-facing names for the registry fields an entry shows. The API's own
+#: keys ("leadSponsor", "overallStatus", "whyStopped") were printed as labels,
+#: and a reader could not tell what the record was saying.
+REGISTRY_LABELS = {
+    "leadSponsor": "申办方",
+    "overallStatus": "试验状态",
+    "phases": "分期",
+    "enrollment": "入组人数",
+    "interventions": "干预措施",
+    "primaryOutcome": "主要终点",
+    "whyStopped": "终止原因",
+}
+
+_PARAM_ZH = {
+    "MEAN": "均值", "LEAST_SQUARES_MEAN": "最小二乘均值", "MEDIAN": "中位数",
+    "GEOMETRIC_MEAN": "几何均值", "COUNT_OF_PARTICIPANTS": "受试者人数",
+    "NUMBER": "数值", "COUNT_OF_UNITS": "计数",
+}
+_DISPERSION_ZH = {
+    "Standard Deviation": "标准差", "Standard Error": "标准误",
+    "95% Confidence Interval": "95% 置信区间", "Full Range": "全距",
+    "Inter-Quartile Range": "四分位距", "Geometric Coefficient of Variation": "几何变异系数",
+}
+_ESTIMATE_ZH = {
+    "Mean Difference (Net)": "净均值差", "Mean Difference (Final Values)": "均值差",
+    "Hazard Ratio (HR)": "HR", "Odds Ratio (OR)": "OR", "Risk Ratio (RR)": "RR",
+    "Risk Difference (RD)": "风险差", "Median Difference (Net)": "净中位数差",
+}
+_STATE_FIELD_ZH = {"overall_status": "试验状态", "why_stopped": "终止原因",
+                   "results_first_posted": "结果首次公布日期", "phase": "分期"}
+
+
+def registry_label(quote) -> str:
+    key = quote.locator.split("·")[-1].strip()
+    return REGISTRY_LABELS.get(key, key)
+
+
+def registry_timeline(item: Item) -> list[tuple[str, str]]:
+    """What changed in the registry, and when the trial ran, as (label, text).
+
+    Without this an entry listed "TERMINATED" and left the reader to guess
+    whether the trial had stopped this week or years ago, and what was new.
+    Every date is the registry's own.
+    """
+    meta = item.meta
+    if meta.get("src_kind") != "registry":
+        return []
+    out: list[tuple[str, str]] = []
+    if "TOPLINE" in item.study and meta.get("results_first_posted"):
+        out.append(("本条变化", f"ClinicalTrials.gov 于 {meta['results_first_posted']} 首次公布结果"))
+    elif meta.get("first_sighting"):
+        out.append(("本条变化", f"首次收录，登记状态为 {meta.get('overall_status') or '未注明'}"
+                               f"（注册库最近更新 {meta.get('last_update_posted') or '未注明'}）"))
+    elif meta.get("state_changes"):
+        changes = []
+        for part in str(meta["state_changes"]).split("; "):
+            field, _, change = part.partition(": ")
+            before, _, after = change.partition(" -> ")
+            label = _STATE_FIELD_ZH.get(field.strip(), field.strip())
+            changes.append(f"{label}由 {before or '无'} 变为 {after or '无'}")
+        out.append(("本条变化", "；".join(changes)))
+    ran = []
+    if meta.get("start_date"):
+        ran.append(f"开始 {meta['start_date']}")
+    if meta.get("primary_completion"):
+        ran.append(f"主要完成 {meta['primary_completion']}")
+    if ran:
+        out.append(("试验时间", "，".join(ran)))
+    return out
+
+
+def results_rows(outcome: dict) -> tuple[list[str], list[list[str]]]:
+    """Header and rows of one posted primary outcome, as the registry wrote it."""
+    groups = outcome.get("groups") or []
+    has_analyses = any(row.get("analyses") for row in outcome.get("rows") or [])
+    header = ["指标"] + [f"{g.get('title')}（n={g['n']}）" if g.get("n") else str(g.get("title"))
+                         for g in groups] + (["组间比较"] if has_analyses else [])
+    rows = []
+    for row in outcome.get("rows") or []:
+        cells = [row.get("label") or "—"]
+        cells += [row.get("values", {}).get(g.get("id"), "—") for g in groups]
+        if has_analyses:
+            cells.append("；".join(
+                "，".join(filter(None, [
+                    f"{_ESTIMATE_ZH.get(a.get('estimate_type'), a.get('estimate_type') or '估计值')} "
+                    f"{a['estimate']}" if a.get("estimate") else "",
+                    f"p = {a['p']}" if a.get("p") else ""]))
+                for a in row.get("analyses") or []) or "—")
+        rows.append(cells)
+    return header, rows
+
+
+def results_caption(outcome: dict) -> str:
+    bits = [outcome.get("time_frame"), outcome.get("unit")]
+    param = _PARAM_ZH.get(outcome.get("param") or "", outcome.get("param"))
+    dispersion = _DISPERSION_ZH.get(outcome.get("dispersion") or "", outcome.get("dispersion"))
+    if param:
+        bits.append(f"{param}（± {dispersion}）" if dispersion else param)
+    return " · ".join(str(b) for b in bits if b)
+
+
+def results_notes(results: dict) -> list[str]:
+    """Serious events and deaths per arm, and how the registry labelled the analyses."""
+    out = []
+    adverse = results.get("adverse") or []
+    serious = [f"{g['title']} {g['serious']}/{g['serious_at_risk']}" for g in adverse
+               if g.get("serious") is not None and g.get("serious_at_risk")]
+    deaths = [f"{g['title']} {g['deaths']}/{g['deaths_at_risk']}" for g in adverse
+              if g.get("deaths") is not None and g.get("deaths_at_risk")]
+    if serious:
+        out.append("严重不良事件（发生人数/可评估人数）：" + "；".join(serious))
+    if deaths:
+        out.append("死亡（人数/可评估人数）：" + "；".join(deaths))
+    analyses = [a for o in results.get("primary") or [] for r in o.get("rows") or []
+                for a in r.get("analyses") or []]
+    if analyses and all((a.get("comment") or "").strip().lower() == "descriptive"
+                        for a in analyses):
+        out.append("注册库注明以上组间比较为描述性分析。")
+    out.append("数据取自 ClinicalTrials.gov 结果页，注册库结果未经同行评审。")
+    return out
+
+
 def _field_value(quote) -> str:
     value = f'<span style="color:{INK};">{esc(quote.text)}</span>'
     if quote.translation and not is_chinese(quote.text):
@@ -221,6 +344,34 @@ def _source_line(item: Item) -> str:
             f'<a href="{esc(item.url)}" style="color:{LINK};">{esc(item.url)}</a></p>')
 
 
+def _results_block(item: Item) -> str:
+    """Posted results of a registry entry, as a table of the registry's numbers."""
+    if item.meta.get("src_kind") != "registry" or "TOPLINE" not in item.study:
+        return ""
+    results = item.meta.get("results") or {}
+    if not (results.get("primary") or results.get("adverse")):
+        return (f'<p style="{SMALL}">结果已在注册库公布，本期未能取回数值，'
+                f'请点击原文链接查看。</p>')
+    cell = f"padding:6px 8px;border:1px solid {RULE};vertical-align:top;"
+    out = [f'<div style="margin:0 0 16px;">']
+    for outcome in results.get("primary") or []:
+        header, rows = results_rows(outcome)
+        out.append(f'<p style="margin:0 0 4px;font-size:{px(14)}px;font-weight:700;color:{INK};">'
+                   f'主要终点结果：{esc(outcome.get("title") or "")}</p>')
+        out.append(f'<p style="{RECORD}">{esc(results_caption(outcome))}</p>')
+        out.append(f'<table style="width:100%;border-collapse:collapse;margin:6px 0 10px;'
+                   f'font-size:{px(12)}px;line-height:1.5;color:{INK};">')
+        out.append("<tr>" + "".join(
+            f'<th style="{cell}background:#fafafa;text-align:left;font-weight:600;">{esc(h)}</th>'
+            for h in header) + "</tr>")
+        for row in rows:
+            out.append("<tr>" + "".join(f'<td style="{cell}">{esc(c)}</td>' for c in row) + "</tr>")
+        out.append("</table>")
+    out += [f'<p style="{RECORD}">{esc(note)}</p>' for note in results_notes(results)]
+    out.append("</div>")
+    return "".join(out)
+
+
 def render_entry(item: Item, dm: DomainMap, index: int, rule: bool = False) -> str:
     parts = [ENTRY_RULE if rule else "",
              _entry_title(index, item.title, str(item.meta.get("title_zh") or "")),
@@ -236,17 +387,17 @@ def render_entry(item: Item, dm: DomainMap, index: int, rule: bool = False) -> s
     # sponsor is named. A paper's catalogue facts go in the same block, so a
     # journal entry is not the bare one next to a registry one.
     cells = [f'{esc(label)}：<span style="color:{INK};">{esc(value)}</span>'
-             for label, value in journal_record(item)]
+             for label, value in journal_record(item) + registry_timeline(item)]
     if fields:
         if item.meta.get("sponsor"):
-            cells.append(f'leadSponsor：<span style="color:{INK};">'
+            cells.append(f'{REGISTRY_LABELS["leadSponsor"]}：<span style="color:{INK};">'
                          f'{esc(item.meta["sponsor"])}</span>')
-        cells += [f'{esc(q.locator.split("·")[-1].strip())}：{_field_value(q)}'
-                  for q in fields[:6]]
+        cells += [f'{esc(registry_label(q))}：{_field_value(q)}' for q in fields[:6]]
     if cells:
         parts.append(f'<div style="margin:0 0 14px;">'
                      + "".join(f'<p style="{RECORD}">{cell}</p>' for cell in cells)
                      + "</div>")
+    parts.append(_results_block(item))
     for quote in prose[:4]:
         parts.append(_quote(quote.text.strip(), quote.translation))
     if not item.evidence.quotes:

@@ -346,6 +346,14 @@ ADVERSATIVE = re.compile(r"(?i)\b(?:but|however|whereas|although|though|except|"
 #: Saying that no recommendation can be made is not a guideline. A review wrote
 #: "precluding technology-specific recommendations for MASLD management" and was
 #: graded "Society guideline or consensus statement" at P1.
+#: Alcohol-associated steatohepatitis is alcohol-related liver disease, not
+#: MASH; the bare word "steatohepatitis" put a registry record whose condition
+#: list read "Steatohepatitis Caused by Ingestible Alcohol" under MASH.
+ALCOHOLIC_STEATOHEPATITIS = re.compile(
+    r"(?i)\balcohol(?:ic|[- ]associated|[- ]related)?\s+steatohepatitis\b"
+    r"|\bsteatohepatitis\s+(?:caused by|due to|induced by)\s+(?:ingestible\s+)?alcohol\b"
+    r"|酒精性脂肪性肝炎")
+
 #: An injury model is not an injury signal. "X protects against
 #: methamphetamine-induced hepatotoxicity" is a rat study of a protective
 #: extract; the hepatotoxicity is what the experiment induced on purpose.
@@ -493,6 +501,7 @@ class Tagger:
         """
         hits: list[str] = []
         gated: list[str] = []
+        text = ALCOHOLIC_STEATOHEPATITIS.sub("alcohol", text or "")
         for line_id in self.dm.lines:
             strong = self._line_terms.get(line_id)
             if strong is not None and strong.search(text):

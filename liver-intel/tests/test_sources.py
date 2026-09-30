@@ -1,5 +1,6 @@
 import re
 import json
+from pathlib import Path
 
 from liver_intel.config import Settings
 from liver_intel.feeds import Feed, Registry
@@ -660,3 +661,39 @@ def test_the_literature_window_is_paged_not_truncated(store, fake_fetcher, domai
     assert total == 241
     assert len(ids) == 241            # the whole window, not the first 50
     assert len(set(ids)) == 241       # and no page repeated
+
+
+# --- posted results -----------------------------------------------------------
+# NCT05014087 as the registry served it on 2026-09-30 (trimmed to the fields
+# read). 第009期 said only "TERMINATED / 23 (ACTUAL)" for it: the news was that
+# results had been posted the day before, and the entry showed none of them.
+NCT05014087 = (Path(__file__).parent / "data" / "ctgov_NCT05014087.json").read_text()
+CTGOV = "https://clinicaltrials.gov/api/v2/studies"
+
+
+def test_results_summary_keeps_the_registry_numbers():
+    from liver_intel.sources.ctgov import results_summary
+    summary = results_summary(json.loads(NCT05014087))
+    outcome = summary["primary"][0]
+    assert outcome["title"] == "Change in Biomarkers of Inflammation"
+    assert [g["n"] for g in outcome["groups"]] == ["13", "10"]
+    il6 = outcome["rows"][0]
+    assert il6["label"] == "IL-6"
+    assert il6["values"] == {"OG000": "-255.75 ± 44.66", "OG001": "47.16 ± 38.40"}
+    assert il6["analyses"][0]["p"] == "0.0148"
+    assert summary["adverse"][1] == {"title": "Arm B: No Digoxin", "serious": 4,
+                                     "serious_at_risk": 10, "deaths": 2, "deaths_at_risk": 10}
+
+
+def test_a_results_posting_carries_the_results(store, fake_fetcher, domain_map):
+    from liver_intel.feeds import Feed
+    feed = Feed(id="ctgov.v2", url=CTGOV, source="ctgov", task="T3",
+                status="verified", kind="api")
+    fake_fetcher.add(f"{CTGOV}/NCT05014087?format=json", NCT05014087)
+    fake_fetcher.add(f"{CTGOV}?", json.dumps({"studies": [json.loads(NCT05014087)]}))
+    ctx = context(store, fake_fetcher, domain_map, [feed], since="2026-09-28")
+    [item] = CtGovSource(terms=("alcoholic hepatitis",)).collect(ctx)
+    assert "TOPLINE" in item.study
+    assert item.meta["results"]["primary"][0]["rows"][2]["label"] == "TNF-alpha"
+    assert item.meta["start_date"] == "2021-10-08"
+    assert item.meta["primary_completion"] == "2025-06-22"

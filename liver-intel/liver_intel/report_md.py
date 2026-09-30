@@ -31,7 +31,9 @@ from .images import from_meta
 from .keywords import reader_keywords
 from .models import Item, is_chinese
 from .report import WEEKDAY_ZH, coverage_window, issue_label
-from .report_wechat import journal_record, normalise, provenance
+from .report_wechat import (REGISTRY_LABELS, journal_record, normalise, provenance,
+                            registry_label, registry_timeline, results_caption,
+                            results_notes, results_rows)
 
 TRANSLATED = "编者译，仅供参考"
 
@@ -86,16 +88,37 @@ def _record(item: Item, fields: list) -> list[str]:
     slab that no one could scan; a list gives each value its own line and its
     own left edge.
     """
-    cells = [f"**{esc(label)}**：{esc(value)}" for label, value in journal_record(item)]
+    cells = [f"**{esc(label)}**：{esc(value)}"
+             for label, value in journal_record(item) + registry_timeline(item)]
     if item.meta.get("sponsor"):
-        cells.append(f"**leadSponsor**：{esc(str(item.meta['sponsor']))}")
+        cells.append(f"**{REGISTRY_LABELS['leadSponsor']}**：{esc(str(item.meta['sponsor']))}")
     for quote in fields[:6]:
-        label = esc(quote.locator.split("·")[-1].strip())
+        label = esc(registry_label(quote))
         value = esc(quote.text)
         if quote.translation and not is_chinese(quote.text):
             value += f"｜{esc(quote.translation)}"
         cells.append(f"**{label}**：{value}")
     return [f"- {cell}" for cell in cells] + [""] if cells else []
+
+
+def _results(item: Item) -> list[str]:
+    """Posted registry results as Markdown tables of the registry's numbers."""
+    if item.meta.get("src_kind") != "registry" or "TOPLINE" not in item.study:
+        return []
+    results = item.meta.get("results") or {}
+    if not (results.get("primary") or results.get("adverse")):
+        return ["结果已在注册库公布，本期未能取回数值，请点击原文链接查看。", ""]
+    out: list[str] = []
+    for outcome in results.get("primary") or []:
+        header, rows = results_rows(outcome)
+        out += [f"**主要终点结果：{esc(outcome.get('title') or '')}**", "",
+                esc(results_caption(outcome)), "",
+                "| " + " | ".join(esc(h) for h in header) + " |",
+                "|" + "---|" * len(header)]
+        out += ["| " + " | ".join(esc(c) for c in row) + " |" for row in rows]
+        out.append("")
+    out += [f"- {esc(note)}" for note in results_notes(results)] + [""]
+    return out
 
 
 def _quote(quote) -> list[str]:
@@ -117,6 +140,7 @@ def render_entry(item: Item, dm: DomainMap, index: int) -> list[str]:
     prose = [q for q in item.evidence.quotes
              if q not in fields and normalise(q.text) != normalise(item.title)]
     out += _record(item, fields)
+    out += _results(item)
     for quote in prose[:4]:
         out += _quote(quote)
     if not item.evidence.quotes:

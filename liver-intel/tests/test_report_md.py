@@ -5,7 +5,7 @@ import re
 
 from liver_intel.conference import Calendar, Conference
 from liver_intel.models import Item, Quote
-from liver_intel.report_md import conference_block, wechat_markdown
+from liver_intel.report_md import conference_block, render_entry, wechat_markdown
 
 
 def make(priority="P0", lines=("L3",), title="Phase 3 topline", study=("PHASE3",), **meta):
@@ -100,9 +100,9 @@ def test_registry_record_is_one_fact_per_line_opening_with_the_sponsor(domain_ma
     record = [l for l in lines if l.startswith("- **")]
     # One fact per line, the sponsor first: six fields joined by interpuncts
     # wrapped into a slab no one could scan.
-    assert record[0] == "- **leadSponsor**：Roswell Park Cancer Institute"
-    assert "- **overallStatus**：SUSPENDED｜已暂停" in record
-    assert "- **whyStopped**：awaiting agreement with Sponsor｜等待与申办方达成协议" in record
+    assert record[0] == "- **申办方**：Roswell Park Cancer Institute"
+    assert "- **试验状态**：SUSPENDED｜已暂停" in record
+    assert "- **终止原因**：awaiting agreement with Sponsor｜等待与申办方达成协议" in record
     assert "> SUSPENDED" not in md          # a field is not a pull quote
 
 
@@ -194,3 +194,11 @@ def test_a_rule_separates_consecutive_entries(domain_map):
     assert "---" in lines[second:third]
     # But nothing above the very first entry: the section heading is there.
     assert "---" not in lines[:first]
+
+
+def test_posted_registry_results_are_a_markdown_table(domain_map):
+    from test_wechat import digoxin_entry
+    text = "\n".join(render_entry(digoxin_entry(), domain_map, 1))
+    assert "| 指标 | Arm A: Digoxin（n=13） | Arm B: No Digoxin（n=10） | 组间比较 |" in text
+    assert "| IL-6 | -255.75 ± 44.66 | 47.16 ± 38.40 | 净均值差 -302.92，p = 0.0148 |" in text
+    assert "**本条变化**：ClinicalTrials.gov 于 2026-09-29 首次公布结果" in text
