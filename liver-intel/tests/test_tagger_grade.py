@@ -693,3 +693,22 @@ def test_a_call_for_future_recommendations_is_vetoed_on_its_own(tagger):
         "establish causality and define evidence-based clinical "
         "recommendations.") for tag in st.tags}
     assert "GUIDELINE" not in tags
+
+
+# --- injury models ----------------------------------------------------------
+# From 2026-09-30: a rat study of a seaweed extract came out as a P1 hepatotoxicity
+# signal, because its title names the injury the experiment induced on purpose.
+def dili(tagger, text):
+    return any("DILI_SIGNAL" in s.tags for s in tagger.sentence_tags(text))
+
+
+def test_a_protective_extract_is_not_a_hepatotoxicity_signal(tagger):
+    assert not dili(tagger, "Hormophysa cuneiformis protects against methamphetamine-"
+                            "induced hepatotoxicity via antioxidant, anti-inflammatory, and "
+                            "autophagy-regulatory mechanisms: histological and biochemical studies.")
+
+
+def test_hepatotoxicity_in_a_patient_is_still_a_signal(tagger):
+    assert dili(tagger, "Despite 6 months of azole therapy, treatment was discontinued for "
+                        "severe hepatotoxicity progressing to cirrhosis, and the patient "
+                        "subsequently died from septic shock.")

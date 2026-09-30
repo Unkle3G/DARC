@@ -346,6 +346,15 @@ ADVERSATIVE = re.compile(r"(?i)\b(?:but|however|whereas|although|though|except|"
 #: Saying that no recommendation can be made is not a guideline. A review wrote
 #: "precluding technology-specific recommendations for MASLD management" and was
 #: graded "Society guideline or consensus statement" at P1.
+#: An injury model is not an injury signal. "X protects against
+#: methamphetamine-induced hepatotoxicity" is a rat study of a protective
+#: extract; the hepatotoxicity is what the experiment induced on purpose.
+PROTECTIVE_MODEL = re.compile(
+    r"(?i)\bagainst\b[^.;]{0,60}?-induced (?:hepatotoxicity|liver injury|hepatic injury|liver damage)"
+    r"|\b(?:attenuat|ameliorat|alleviat|mitigat|prevent|revers|counteract|rescu)\w*\b[^.;]{0,80}?"
+    r"-induced (?:hepatotoxicity|liver injury|hepatic injury|liver damage)"
+    r"|(?:保护|减轻|改善|缓解|拮抗)[^。；]{0,30}?(?:肝损伤|肝毒性)")
+
 NO_RECOMMENDATION = re.compile(
     r"(?i)"
     r"\bprecluding\b[^.]*\brecommendations?\b"
@@ -550,6 +559,8 @@ class Tagger:
                 tags.discard("APPROVAL")
             if NEGATED_FINDING.search(sentence) and not ADVERSATIVE.search(sentence):
                 tags -= {"SAFETY_SIGNAL", "DILI_SIGNAL"}
+            if "DILI_SIGNAL" in tags and PROTECTIVE_MODEL.search(sentence):
+                tags.discard("DILI_SIGNAL")
             if "GUIDELINE" in tags and NO_RECOMMENDATION.search(sentence):
                 tags.discard("GUIDELINE")
             if tags:
