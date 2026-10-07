@@ -55,6 +55,17 @@ def test_other_weekdays_cover_the_previous_day():
     assert coverage_window("2026-09-15") == ("2026-09-14", "2026-09-15")
 
 
+def test_the_day_after_a_holiday_covers_the_whole_holiday():
+    """2026-10-08 is the first run after the National Day break (10-01..10-07);
+    the old one-day rule opened its window on 10-07 and lost the week."""
+    assert coverage_window("2026-10-08") == ("2026-09-30", "2026-10-08")
+
+
+def test_the_day_after_a_midweek_holiday_reaches_back_over_it():
+    # 2026-06-19 (Fri) is Dragon Boat; the following Monday reaches back to Thursday.
+    assert coverage_window("2026-06-22") == ("2026-06-18", "2026-06-22")
+
+
 def test_daily_report_prints_url_and_quoted_evidence(domain_map):
     from liver_intel.models import Quote
 

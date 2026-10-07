@@ -43,14 +43,27 @@ def issue_label(issue: str | int | None) -> str:
 
 
 def coverage_window(report_date: str) -> tuple[str, str]:
-    """What a given day's report covers.
+    """What a given day's report covers: from the previous run day to today.
 
-    Monday reaches back through the weekend (Friday to Sunday); every other
-    weekday covers the previous day.
+    The previous run day is the last day the schedule ran, so Monday reaches
+    back to Friday and the first day after a public holiday reaches back over
+    all of it. The old rule ("Monday goes back three days, every other day
+    one") opened 2026-10-08's window on 10-07 and would have dropped
+    everything published during the National Day week.
     """
+    from .workdays import Workdays
+
     day = date.fromisoformat(report_date)
-    back = 3 if day.weekday() == 0 else 1
-    return (day - timedelta(days=back)).isoformat(), report_date
+    calendar = Workdays.load()
+    previous = day - timedelta(days=1)
+    # Bounded: no published calendar has a break longer than a fortnight.
+    for _ in range(14):
+        if calendar.verdict(previous.isoformat()).run:
+            break
+        previous -= timedelta(days=1)
+    else:
+        previous = day - timedelta(days=3 if day.weekday() == 0 else 1)
+    return previous.isoformat(), report_date
 
 
 def _line_labels(item: Item, dm: DomainMap) -> str:
