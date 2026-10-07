@@ -111,7 +111,10 @@ STUDY_PATTERNS: list[tuple[str, Sequence[str], Sequence[str]]] = [
       r"may proceed letter"],
      ["临床试验申请获批", "临床试验申请获得批准", "临床试验批件", "获准开展临床试验", "默示许可"]),
     ("CRL", [r"complete response letter", r"\bcrl\b", r"refuse to file"], ["完整回复函"]),
-    ("DESIGNATION", [r"breakthrough therapy", r"fast track", r"orphan drug", r"priority review",
+    # "Breakthrough therapy" alone is also praise ("This breakthrough therapy
+    # offers a promising option", a review, 第010期); the designation is named.
+    ("DESIGNATION", [r"breakthrough therapy (?:designation|status)", r"\bBTD\b",
+                     r"granted breakthrough", r"fast track", r"orphan drug", r"priority review",
                      r"prime designation", r"regenerative medicine advanced therapy"],
      ["突破性治疗", "优先审评", "孤儿药", "附条件批准"]),
     ("ADCOM", [r"advisory committee", r"\badcom\b", r"chmp opinion", r"chmp adopted"],
@@ -253,8 +256,10 @@ CORRESPONDENCE = re.compile(
 #: and 中华外科杂志's HCC consensus would have been silenced by a blanket veto.
 #: Correspondence loses it, because a letter *about* a consensus is not one.
 CATALOGUE_VETO = {
-    "Review": {"DILI_SIGNAL", "SAFETY_SIGNAL"},
-    "Systematic Review": {"DILI_SIGNAL", "SAFETY_SIGNAL"},
+    # A review restates regulatory history; it does not announce it. An
+    # approval that is news arrives from the regulator or the company.
+    "Review": {"DILI_SIGNAL", "SAFETY_SIGNAL", "APPROVAL", "DESIGNATION"},
+    "Systematic Review": {"DILI_SIGNAL", "SAFETY_SIGNAL", "APPROVAL", "DESIGNATION"},
     "Historical Article": {"DILI_SIGNAL", "SAFETY_SIGNAL"},
     "Letter": {"DILI_SIGNAL", "SAFETY_SIGNAL", "GUIDELINE"},
     "Comment": {"DILI_SIGNAL", "SAFETY_SIGNAL", "GUIDELINE"},
@@ -330,6 +335,9 @@ NEGATED_FINDING = re.compile(
     r"(?i)"
     r"^\s*(?:no|none|neither)\b[^.]*?\b(?:were|was|are|is)\s+"
     r"(?:observed|reported|seen|noted|detected|found|identified|recorded)\b"
+    # "No hepatic decompensation or serious adverse events occurred." (第010期
+    # initial P0) -- the denial with an intransitive verb and no auxiliary.
+    r"|^\s*(?:no|none|neither)\b[^.]*?\b(?:occurred|developed|emerged|happened)\b"
     r"|\b(?:did|do|does)\s+not\s+(?:observe|report|show|reveal|find|identify|"
     r"demonstrate)\b"
     r"|\b(?:were|was)\s+not\s+(?:observed|reported|seen|noted|detected|found)\b"

@@ -731,3 +731,37 @@ def test_alcoholic_steatohepatitis_is_not_mash(tagger):
 def test_metabolic_steatohepatitis_is_still_mash(tagger):
     lines, _ = tagger.tag_lines("Resmetirom in noncirrhotic steatohepatitis with fibrosis")
     assert "L3" in lines
+
+
+# --- 第010期 initial selection ----------------------------------------------
+def tags_of(tagger, text):
+    return set().union(*[s.tags for s in tagger.sentence_tags(text)] or [set()])
+
+
+def test_no_event_occurred_is_a_denial(tagger):
+    # The initial P0: a meta-analysis's "nothing happened" sentence.
+    assert "SAFETY_SIGNAL" not in tags_of(
+        tagger, "No hepatic decompensation or serious adverse events occurred.")
+
+
+def test_breakthrough_therapy_as_praise_is_not_a_designation(tagger):
+    assert "DESIGNATION" not in tags_of(
+        tagger, "This breakthrough therapy offers a promising option for MASH management, "
+                "though long-term studies and broader geographic representation in trials "
+                "remain necessary to fully establish its role in clinical practice.")
+
+
+def test_a_named_breakthrough_designation_still_counts(tagger):
+    assert "DESIGNATION" in tags_of(
+        tagger, "The FDA granted Breakthrough Therapy Designation to the candidate.")
+
+
+def test_a_review_does_not_announce_an_approval(tagger):
+    item = Item(src="pubmed", title="Resmetirom: A New FDA-approved Drug as a Targeted "
+                "Therapeutic Strategy in Metabolic Dysfunction Associated Steatohepatitis",
+                url="u", date="2026-10-08",
+                meta={"src_kind": "journal", "publication_types": ["Review"],
+                      "body": "This review examines Resmetirom, the first FDA-approved drug "
+                              "for non-cirrhotic MASH with moderate to severe hepatic fibrosis."})
+    tagger.apply(item)
+    assert "APPROVAL" not in item.study
