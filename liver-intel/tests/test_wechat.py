@@ -1,0 +1,527 @@
+import re
+
+from liver_intel.images import ImageCandidate, extract_images, from_meta
+from liver_intel.models import Item, Quote
+from liver_intel.report_wechat import preview_html, wechat_article, wechat_html
+
+
+def make(priority="P0", lines=("L3",), title="Phase 3 topline",
+         study=("PHASE3", "ENDPOINT_MET"), **meta):
+    item = Item(src="newswire", title=title, url="https://www.example.com/a",
+                date="2026-09-14", meta={"src_kind": "company", **meta},
+                lines=list(lines), study=list(study), P=priority, score=9.2)
+    item.evidence.signals = ["PH3_RESULT"]
+    item.evidence.quotes = [Quote(text="met the primary endpoint", locator="para 1")]
+    return item
+
+
+# --- image extraction -----------------------------------------------------
+HTML = """<html><head><meta property="og:image" content="/media/hero.jpg"></head><body>
+<img src="/img/company-logo.png" width="400" height="300">
+<img src="/img/kaplan-meier.png" width="800" height="600" alt="KM curve">
+<img src="/img/pixel.gif" width="1" height="1">
+<img src="data:image/png;base64,AAA">
+<img src="/img/chart.svg" width="600" height="400"></body></html>"""
+
+
+def test_only_content_images_survive():
+    found = extract_images(HTML, "https://www.example.com/news/a")
+    assert [c.url for c in found] == ["https://www.example.com/media/hero.jpg",
+                                      "https://www.example.com/img/kaplan-meier.png"]
+
+
+def test_social_image_ranks_first():
+    assert extract_images(HTML, "https://www.example.com/news/a")[0].role == "social"
+
+
+def test_tiny_and_furniture_images_are_dropped():
+    urls = [c.url for c in extract_images(HTML, "https://www.example.com/news/a")]
+    assert not any("logo" in u or "pixel" in u or u.endswith(".svg") for u in urls)
+
+
+# The three images PR Newswire attached to Viking's 2026-09-28 release, as
+# collected. None is the release's own: rt.gif is a read-tracking beacon served
+# as zero bytes (it printed as a blank 源文档配图 in 第008期), the PNG is the
+# site's share widget, and BIO.jpg is the stock picture under every biotech
+# release.
+PRN_RELEASE = ("https://www.prnewswire.com/news-releases/viking-therapeutics-announces-"
+               "closing-of-concurrent-upsized-offerings-302891919.html")
+PRN_FURNITURE = [
+    "https://rt.prnewswire.com/rt.gif?NewsItemId=LA58434&Transmission_Id="
+    "202609281630PR_NEWS_USPR_____LA58434&DateId=20260928",
+    "https://www.prnewswire.com/content/dam/newWidget-desktop.png",
+    "https://www.prnewswire.com/content/dam/prnewswire/subject-and-industry-code-images/BIO.jpg",
+]
+
+
+def test_wire_furniture_is_not_a_figure():
+    html = "<body>" + "".join(f'<img src="{u}">' for u in PRN_FURNITURE) + "</body>"
+    assert extract_images(html, PRN_RELEASE) == []
+
+
+def test_stored_wire_furniture_is_dropped_on_render():
+    """Items collected before the rule still carry the beacon in their meta."""
+    meta = {"images": [{"url": u, "role": "body", "source_url": PRN_RELEASE}
+                       for u in PRN_FURNITURE]}
+    assert from_meta(meta) == []
+
+
+def test_one_picture_under_two_query_strings_is_one_image():
+    base = "https://mmx.prnewswire.com/media/MS1994359/Long-Island-University-x-Jon-Ledecky.jpg"
+    html = (f'<head><meta name="twitter:image" content="{base}?id=OA2965011&p=twitter">'
+            f'<meta property="og:image" content="{base}?id=OA2965011&p=facebook"></head>')
+    assert [c.url for c in extract_images(html, PRN_RELEASE)] == [
+        f"{base}?id=OA2965011&p=twitter"]
+
+
+def body_of(article: str) -> str:
+    """Everything above the sourcing note -- the part a reader scrolls."""
+    return article.split("信源说明")[0]
+
+
+# --- article rendering ----------------------------------------------------
+def test_article_has_no_external_stylesheet(domain_map):
+    article = wechat_html([make()], "2026-09-14", domain_map)
+    assert "<style" not in article and "<link" not in article
+    assert 'style="' in article           # everything is inline instead
+
+
+def test_the_file_declares_its_encoding(domain_map):
+    """A bare fragment opened from disk is guessed at, and every Chinese
+    character came out as mojibake -- in the one workflow the file exists for."""
+    article = wechat_html([make()], "2026-09-14", domain_map)
+    assert article.startswith("<!DOCTYPE html>")
+    assert '<meta charset="utf-8"/>' in article
+    assert "<title>HepaDaily｜2026-09-14</title>" in article
+    # the article itself is still the div that gets copied into the editor
+    assert article.index("<body>") < article.index('<div style="max-width:677px')
+
+
+def test_internal_grades_never_reach_the_reader(domain_map):
+    """P0/P1/P2, line ids, signal names and adapter ids are triage, not copy."""
+    item = make()
+    item.meta["wire"] = "GlobeNewswire"
+    article = wechat_html([item], "2026-09-14", domain_map)
+    for internal in ("P0", "P1", "P2", "PH3_RESULT", "L3 ", "newswire", "score"):
+        assert internal not in article, internal
+
+
+def test_sections_use_reading_names(domain_map):
+    items = [make("P0", title="a"), make("P1", title="b"), make("P2", title="c")]
+    article = wechat_html(items, "2026-09-14", domain_map)
+    assert "今日头条" in article and "前沿速览" in article and "最新动态" in article
+
+
+def test_brand_is_hepadaily(domain_map):
+    article = wechat_html([make()], "2026-09-14", domain_map)
+    assert "HepaDaily" in article
+    assert "肝病情报日报" not in article
+
+
+def test_keywords_replace_engine_labels(domain_map):
+    item = make()
+    item.meta["companies"] = ["Madrigal Pharmaceuticals"]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "MASH" in article                      # from L3
+    assert "III期临床" in article                  # from PHASE3
+    assert "Madrigal Pharmaceuticals" in article
+    assert "线路" not in article and "命中信号" not in article
+
+
+def test_sourcing_note_sits_at_the_end(domain_map):
+    item = make()
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert article.index(item.title) < article.index("不采用媒体转述")
+    assert article.index(item.title) < article.index("信源说明")
+
+
+def test_provenance_and_link_follow_each_entry(domain_map):
+    """Provenance is not collected into a list at the end: each entry carries
+    its own publisher, date and clickable original, before the next entry."""
+    items = [make("P0", title="first entry"), make("P1", title="second entry")]
+    for index, item in enumerate(items):
+        item.url = f"https://www.example.com/{index}"
+        item.meta["wire"] = "GlobeNewswire"
+    article = wechat_html(items, "2026-09-14", domain_map)
+    first_link = article.index(f'<a href="{items[0].url}"')
+    assert article.index("first entry") < first_link < article.index("second entry")
+    assert article.count("出处：GlobeNewswire · 2026-09-14") == 2
+    assert "查看原文" in article
+    assert "信源与原文" not in article
+
+
+def test_foreign_title_keeps_the_original_first_and_its_rendering_after(domain_map):
+    """Original first, rendering after -- the rule for titles as for quotes."""
+    item = make(title="Phase 3 topline results in MASH")
+    item.meta["title_zh"] = "MASH III期顶线结果"
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "Phase 3 topline results in MASH</h2>" in article
+    assert "MASH III期顶线结果" in article
+    assert article.index("Phase 3 topline results in MASH</h2>") < article.index("MASH III期顶线结果")
+    assert "编者译，仅供参考" in body_of(article)
+
+
+def test_chinese_title_gets_nothing_added(domain_map):
+    item = make(title="某公司III期临床达到主要终点")
+    item.meta["title_zh"] = "should not appear"
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "某公司III期临床达到主要终点</h2>" in article
+    assert "should not appear" not in article
+
+
+def test_registry_record_opens_with_its_sponsor(domain_map):
+    item = make()
+    item.src = "ctgov"
+    item.meta["sponsor"] = "Roswell Park Cancer Institute"
+    item.evidence.quotes = [Quote(text="awaiting agreement with Sponsor",
+                                  locator="ClinicalTrials.gov · whyStopped")]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    record = article[article.index("申办方"):article.index("终止原因")]
+    assert "Roswell Park Cancer Institute" in record
+    assert "出处：Roswell Park Cancer Institute · ClinicalTrials.gov" in article
+    assert "Roswell Park Cancer Institute</span>" in article      # keyword chip too
+
+
+def test_registry_field_rendering_sits_beside_the_value(domain_map):
+    item = make()
+    item.evidence.quotes = [
+        Quote(text="Business Reasons", locator="ClinicalTrials.gov · whyStopped",
+              translation="商业原因")]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "Business Reasons" in article and "｜商业原因" in article
+
+
+# --- quotes and translation ----------------------------------------------
+def test_chinese_quote_is_never_translated(domain_map):
+    item = make()
+    item.evidence.quotes = [Quote(text="该方案III期临床达到主要终点", lang="zh",
+                                  translation="the trial met its primary endpoint")]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "该方案III期临床达到主要终点" in article
+    assert "the trial met its primary endpoint" not in article
+    assert "编者译" not in body_of(article)
+
+
+def test_foreign_quote_keeps_original_and_labels_the_translation(domain_map):
+    item = make()
+    item.evidence.quotes = [Quote(text="met the primary endpoint", lang="en",
+                                  translation="达到主要终点")]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "met the primary endpoint" in article
+    assert "达到主要终点" in article
+    assert "编者译，仅供参考" in article
+
+
+def test_foreign_quote_without_a_translation_stands_alone(domain_map):
+    """Rules-only runs have no model, so no translation is invented."""
+    item = make()
+    item.evidence.quotes = [Quote(text="met the primary endpoint", lang="en")]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "met the primary endpoint" in article
+    assert "编者译" not in body_of(article)
+
+
+def test_titles_are_escaped(domain_map):
+    item = make(title='<script>alert("x")</script> Phase 3')
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "<script>" not in article
+    assert "&lt;script&gt;" in article
+
+
+# --- figures --------------------------------------------------------------
+def test_figure_is_rendered_with_a_caption(domain_map):
+    item = make()
+    item.meta["images"] = [ImageCandidate(
+        url="https://www.example.com/media/hero.jpg", alt="KM curve",
+        source_url="https://www.example.com/a").to_json()]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "https://www.example.com/media/hero.jpg" in article
+    assert "KM curve" in article
+    assert "版权归原发布方所有" in article
+
+
+def test_item_without_a_figure_renders_cleanly(domain_map):
+    article = wechat_html([make()], "2026-09-14", domain_map)
+    assert "<figure" not in article
+
+
+# --- shell ----------------------------------------------------------------
+def test_watermark_is_prominent(domain_map):
+    article = wechat_html([make()], "2026-09-14", domain_map, watermark="演示数据")
+    assert "演示数据" in article
+    # ahead of the headline itself -- the <title> in the document wrapper is
+    # not what a reader sees.
+    assert article.index("演示数据") < article.index("<h1")
+
+
+def test_empty_day_still_renders(domain_map):
+    article = wechat_html([], "2026-09-15", domain_map)
+    assert "没有达到入选门槛" in article
+
+
+def test_sections_follow_priority_order(domain_map):
+    items = [make("P1", title="p1 item"), make("P0", title="p0 item")]
+    article = wechat_html(items, "2026-09-14", domain_map)
+    assert article.index("p0 item") < article.index("p1 item")
+
+
+def test_entries_are_numbered_continuously(domain_map):
+    items = [make("P0", title="a"), make("P0", title="b"), make("P1", title="c")]
+    article = wechat_html(items, "2026-09-14", domain_map)
+    numbers = re.findall(r'>(\d{2})</span>&nbsp;', article)
+    assert numbers == ["01", "02", "03"]
+
+
+def test_operator_notes_never_reach_the_reader(domain_map):
+    article = wechat_html([make()], "2026-09-14", domain_map,
+                          notes=["[newswire] no verified endpoint in the registry"])
+    assert "no verified endpoint" not in article
+    assert "运行提示" not in article
+
+
+def test_reference_line_names_the_source(domain_map):
+    """A registry or literature entry has no company, and was falling back to
+    its date alone -- which tells a reader nothing about where it came from."""
+    item = make(title="Phase 3 trial terminated")
+    item.src = "ctgov"
+    item.meta.pop("companies", None)
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "ClinicalTrials.gov · 2026-09-14" in article
+
+
+def test_registry_fields_render_as_a_record_not_pull_quotes(domain_map):
+    item = make()
+    item.evidence.quotes = [
+        Quote(text="TERMINATED", locator="ClinicalTrials.gov · overallStatus"),
+        Quote(text="Business Reasons", locator="ClinicalTrials.gov · whyStopped"),
+    ]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert "试验状态：" in article and "TERMINATED" in article
+    assert "overallStatus" not in article         # API keys are not reader labels
+    assert "<blockquote" not in article
+
+
+def test_a_quote_that_repeats_the_headline_is_not_shown_twice(domain_map):
+    item = make(title="Inventiva Announces Last Patient Visit in NATiV3")
+    item.evidence.quotes = [
+        Quote(text="Inventiva Announces Last Patient Visit in NATiV3", locator="tag:PHASE3"),
+        Quote(text="Topline results of NATiV3 expected in Q4 2026", locator="tag:TOPLINE")]
+    article = wechat_html([item], "2026-09-14", domain_map)
+    assert article.count("Inventiva Announces Last Patient Visit in NATiV3") == 1
+    assert "<blockquote" in article and "Topline results of NATiV3" in article
+
+
+def test_conference_block_is_a_dated_timeline(domain_map, monkeypatch):
+    from liver_intel import report_wechat
+    from liver_intel.conference import Calendar, Conference
+    calendar = Calendar(conferences=[Conference(
+        id="X", name="Congress X", start="2026-11-05", end="2026-11-09", verified=True,
+        location="Denver", abstract_close="2026-05-28", late_breaker_close="2026-09-25",
+        late_breaker_release="2026-11-05")])
+    block = report_wechat._conference_block("2026-09-17", calendar)
+    assert "摘要投稿截止" in block and "2026-05-28　已过" in block
+    assert "Late-breaker 投稿截止" in block and "2026-09-25" in block
+    assert "Late-breaker embargo lift" in block
+    assert "解禁" not in block and "摘要录用通知" not in block
+    assert (block.index("摘要投稿截止") < block.index("Late-breaker 投稿截止")
+            < block.index("Late-breaker embargo lift"))
+
+
+def test_stcs_render_as_a_compact_list_under_the_annual_meetings(domain_map):
+    from liver_intel import report_wechat
+    from liver_intel.conference import Calendar, Conference
+    calendar = Calendar(conferences=[
+        Conference(id="A", name="Annual X", kind="annual", start="2026-11-05", end="2026-11-09",
+                   verified=True, abstract_close="2026-05-28"),
+        Conference(id="S", name="STC Almaty", kind="stc", society="APASL",
+                   start="2026-10-08", end="2026-10-09",
+                   verified=True, location="Almaty, Kazakhstan", location_zh="哈萨克斯坦 阿拉木图")])
+    block = report_wechat._conference_block("2026-09-17", calendar)
+    assert "APASL 专题会（STC）" in block and "STC Almaty" in block
+    assert "Almaty, Kazakhstan　哈萨克斯坦 阿拉木图" in block
+    assert block.index("Annual X") < block.index("APASL 专题会（STC）") < block.index("STC Almaty")
+    assert "2 条" in block
+
+
+# --- type scale ------------------------------------------------------------
+def test_every_size_goes_through_the_one_scale(domain_map):
+    """A global size change is one number, not twenty scattered literals."""
+    import re
+    from liver_intel import report_wechat
+    source = (report_wechat.__file__).replace(".pyc", ".py")
+    literals = re.findall(r"font-size:(\d+)px", open(source, encoding="utf-8").read())
+    assert literals == [], f"font sizes bypassing px(): {literals}"
+
+
+def test_the_step_shrinks_the_rendered_article(domain_map, monkeypatch):
+    from liver_intel import report_wechat
+    assert report_wechat.px(16) == 14 and report_wechat.px(22) == 20
+    # 9px is the floor: below it WeChat's own rendering stops being legible.
+    monkeypatch.setattr(report_wechat, "FONT_STEP", -20)
+    assert report_wechat.px(12) == 9
+
+
+def test_no_rendered_size_is_smaller_than_the_floor(domain_map):
+    import re
+    article = wechat_html([make()], "2026-09-14", domain_map)
+    sizes = [int(n) for n in re.findall(r"font-size:(\d+)px", article)]
+    assert sizes and min(sizes) >= 9 and max(sizes) <= 20
+
+
+def test_the_record_block_is_one_fact_per_line_and_entries_are_ruled(domain_map):
+    """Six fields joined by interpuncts wrapped into a slab no one could scan."""
+    from liver_intel.report_wechat import ENTRY_RULE, RECORD
+
+    first = make("P0", title="first")
+    first.src = "ctgov"
+    first.meta["sponsor"] = "Roswell Park Cancer Institute"
+    first.evidence.quotes = [
+        Quote(text="SUSPENDED", locator="ClinicalTrials.gov · overallStatus",
+              translation="已暂停"),
+        Quote(text="PHASE1", locator="ClinicalTrials.gov · phases")]
+    second = make("P1", title="second")
+    html = wechat_html([first, second], "2026-09-14", domain_map)
+
+    assert html.count(f'<p style="{RECORD}">') == 3      # sponsor + 2 fields
+    assert f'<p style="{RECORD}">申办方：' in html
+    assert "　·　overallStatus" not in html              # no longer one run-on line
+    # A rule before every entry but the first, across the section break too.
+    assert html.count(ENTRY_RULE) == 1
+    assert html.index(ENTRY_RULE) < html.index("second")
+
+
+# --- issue number ---------------------------------------------------------
+def test_issue_number_sits_in_the_masthead_and_the_title(domain_map):
+    article = wechat_html([make()], "2026-09-14", domain_map, issue="003")
+
+    assert "HepaDaily｜第003期｜2026-09-14（周一）" in article
+    assert "<title>HepaDaily｜第003期｜2026-09-14</title>" in article
+
+
+def test_without_an_issue_the_masthead_is_unchanged(domain_map):
+    article = wechat_html([make()], "2026-09-14", domain_map)
+
+    assert "HepaDaily｜2026-09-14（周一）" in article
+    assert "期｜" not in article
+
+
+def test_the_issue_number_is_written_the_same_however_it_was_typed():
+    """``3``, ``003`` and ``第003期`` are one issue, not three."""
+    from liver_intel.report import issue_label
+
+    assert issue_label("3") == issue_label("003") == issue_label("第003期") == "第003期"
+    assert issue_label(3) == "第003期"
+    assert issue_label("") == "" and issue_label(None) == ""
+    # Anything that is not a plain number is the operator's own wording.
+    assert issue_label("创刊号") == "创刊号"
+
+
+def test_the_summary_leads_the_article(domain_map):
+    from liver_intel import report_wechat
+    from liver_intel.models import Item
+
+    item = Item(src="pubmed", title="A paper", url="https://www.example.com/a",
+                date="2026-09-22", lines=["L3"], P="P2", meta={"src_kind": "journal"})
+    html = wechat_html([item], "2026-09-22", domain_map,
+                                     summary="本期一条，来自期刊。")
+    assert "本期一条，来自期刊。" in html
+    assert html.index("本期一条") < html.index("A paper")
+    assert "导读" not in wechat_html([item], "2026-09-22", domain_map)
+
+
+def test_the_summary_is_escaped_like_any_other_copy(domain_map):
+    from liver_intel import report_wechat
+    from liver_intel.models import Item
+
+    item = Item(src="pubmed", title="A paper", url="https://www.example.com/a",
+                date="2026-09-22", lines=["L3"], P="P2", meta={"src_kind": "journal"})
+    html = wechat_html([item], "2026-09-22", domain_map,
+                                     summary="本期一条 <script>alert(1)</script>")
+    assert "<script>" not in html and "&lt;script&gt;" in html
+
+
+def test_the_preview_carries_no_document_skeleton(domain_map):
+    """The artifact host supplies doctype, head and body; we must not.
+
+    A second document nested inside the first is not a page, so the preview
+    fragment starts at <title>.
+    """
+    html = preview_html([make(priority="P1")], "2026-09-28", domain_map, issue="007")
+    for tag in ("<!DOCTYPE", "<html", "<head", "<body"):
+        assert tag.lower() not in html.lower(), tag
+    assert html.startswith("<title>")
+    # The host paints its own ground behind the page, so the shell has to paint
+    # an explicit one of its own.
+    assert "background: var(--page)" in html
+    assert "color-scheme: light" in html
+
+
+def test_the_preview_and_the_pasteable_file_hold_the_same_article(domain_map):
+    """The preview is a wrapper, not a second renderer.
+
+    Whatever the operator reads in the browser has to be what lands in the
+    editor, character for character.
+    """
+    items = [make(priority="P1"), make(priority="P2", title="Resmetirom in MASH")]
+    kwargs = dict(issue="007", summary="今日两条。")
+    masthead, article = wechat_article(
+        items, "2026-09-28", domain_map, **kwargs)
+    assert article in wechat_html(
+        items, "2026-09-28", domain_map, **kwargs)
+    assert article in preview_html(
+        items, "2026-09-28", domain_map, **kwargs)
+    assert masthead in preview_html(
+        items, "2026-09-28", domain_map, **kwargs)
+
+
+def test_the_preview_title_names_the_issue(domain_map):
+    html = preview_html([make(priority="P1")], "2026-09-28", domain_map, issue="007")
+    assert "<title>HepaDaily｜第007期｜2026-09-28</title>" in html
+
+
+# --- registry results -----------------------------------------------------
+# From 第009期: NCT05014087 showed "TERMINATED / 23 (ACTUAL)" under API field
+# names, tagged 顶线数据, with none of the results the registry had just posted.
+def digoxin_entry(with_results=True):
+    import json
+    from pathlib import Path
+    from liver_intel.sources.ctgov import results_summary
+    record = json.loads((Path(__file__).parent / "data" / "ctgov_NCT05014087.json").read_text())
+    item = Item(src="ctgov", title="Digoxin In Treatment of Alcohol Associated Hepatitis",
+                url="https://clinicaltrials.gov/study/NCT05014087", date="2026-09-30",
+                study=["PHASE2", "TERMINATED", "TOPLINE"], P="P1", score=7.0,
+                meta={"src_kind": "registry", "sponsor": "Yale University",
+                      "overall_status": "TERMINATED", "first_sighting": True,
+                      "results_first_posted": "2026-09-29", "last_update_posted": "2026-09-29",
+                      "start_date": "2021-10-08", "primary_completion": "2025-06-22"})
+    if with_results:
+        item.meta["results"] = results_summary(record)
+    item.evidence.quotes = [Quote(text="Slow accrual", locator="ClinicalTrials.gov · whyStopped")]
+    return item
+
+
+def test_a_registry_entry_says_what_changed_and_when(domain_map):
+    article = wechat_html([digoxin_entry()], "2026-09-30", domain_map)
+    assert "本条变化：" in article and "ClinicalTrials.gov 于 2026-09-29 首次公布结果" in article
+    assert "开始 2021-10-08，主要完成 2025-06-22" in article
+    assert "终止原因：" in article and "whyStopped" not in article
+
+
+def test_posted_results_are_shown_as_the_registry_numbers(domain_map):
+    article = wechat_html([digoxin_entry()], "2026-09-30", domain_map)
+    assert "主要终点结果：Change in Biomarkers of Inflammation" in article
+    assert "Arm A: Digoxin（n=13）" in article and "Arm B: No Digoxin（n=10）" in article
+    assert "-255.75 ± 44.66" in article and "47.16 ± 38.40" in article
+    assert "净均值差 -302.92，p = 0.0148" in article
+    assert "Arm A: Digoxin 1/13；Arm B: No Digoxin 4/10" in article
+    assert "描述性分析" in article and "未经同行评审" in article
+
+
+def test_a_registry_posting_is_not_called_topline(domain_map):
+    article = wechat_html([digoxin_entry()], "2026-09-30", domain_map)
+    assert "结果已公布" in article and "顶线数据" not in article
+
+
+def test_results_that_could_not_be_fetched_are_said_so(domain_map):
+    article = wechat_html([digoxin_entry(with_results=False)], "2026-09-30", domain_map)
+    assert "本期未能取回数值" in article

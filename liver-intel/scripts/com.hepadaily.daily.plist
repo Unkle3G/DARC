@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  HepaDaily 的每日运行（macOS / launchd）。
+
+  cron 在 macOS 上还能用，但要给 /usr/sbin/cron 开「完全磁盘访问权限」，
+  而且它不认 CRON_TZ，也不补跑睡眠期间错过的任务。launchd 是这台机器上
+  正确的做法：StartCalendarInterval 按*系统本地时区*计时，而且如果到点时
+  Mac 正在睡眠，唤醒后会补跑一次。
+
+  时间：06:30。这是北京时间的口径（scripts/crontab.example 里有为什么是
+  06:30 的推算）。若这台 Mac 的系统时区不是「中国标准时间」，把下面的
+  Hour/Minute 换算成本机时区的对应时刻，不要直接照抄。
+
+  Weekday 1-5 = 周一到周五。法定节假日由脚本自己按
+  data/holidays_cn.json 判断并跳过，所以这里不用管。
+
+  安装：scripts/install-macos.sh
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.hepadaily.daily</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PROJECT__/scripts/run_daily.sh</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- EDGAR 要求 User-Agent 里有联系方式，脚本没有它会直接退出。 -->
+    <key>LIVER_INTEL_CONTACT</key>
+    <string>__CONTACT__</string>
+    <!-- 状态库必须放在仓库之外并且长期保留：nct_state 记住每条试验上次
+         是什么状态，seen_items 记住哪些条目发过。这个文件一旦丢失，
+         下一次运行会把所有已停试验当成「首次见到」重发一遍。 -->
+    <key>LIVER_INTEL_DB</key>
+    <string>__STATE__/state.sqlite3</string>
+    <key>LIVER_INTEL_OUT</key>
+    <string>__STATE__/out</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
+
+  <key>StandardOutPath</key>
+  <string>__STATE__/logs/daily.log</string>
+  <key>StandardErrorPath</key>
+  <string>__STATE__/logs/daily.err</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>
