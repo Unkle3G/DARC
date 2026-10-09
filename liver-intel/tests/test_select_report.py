@@ -223,3 +223,12 @@ def test_no_summary_prints_no_heading(domain_map):
                 date="2026-09-22", lines=["L3"], P="P2", meta={"src_kind": "journal"})
     for empty in (None, "", "   "):
         assert "导读" not in daily_markdown([item], "2026-09-22", domain_map, summary=empty)
+
+
+def test_weekly_header_covers_everything_it_carries(domain_map):
+    """The first digest (2026-10-09) carried items from 09-21 under 覆盖 10-05."""
+    from liver_intel.report import weekly_markdown
+    old = make("P3", 1, ["L3"], 1)
+    old.date = "2026-09-21"
+    text = weekly_markdown([old], "2026-10-09", domain_map)
+    assert "覆盖 2026-09-21 至 2026-10-09" in text.splitlines()[0]

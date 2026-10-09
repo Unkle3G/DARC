@@ -270,10 +270,16 @@ def weekly_markdown(items: list[Item], report_date: str, dm: DomainMap,
                     notes: Iterable[str] = ()) -> str:
     day = date.fromisoformat(report_date)
     start = (day - timedelta(days=4)).isoformat()
+    # The pool holds everything since it was last drained, which after a
+    # holiday Friday (or the first run) is more than one week: 2026-10-09's
+    # digest carried items from 09-21 under a header saying 10-05.
+    dated = sorted(i.date for i in items if i.date)
+    if dated and dated[0] < start:
+        start = dated[0]
     head = [
         f"# {BRAND} 内部周汇总 {report_date}（覆盖 {start} 至 {report_date}）",
         "",
-        f"> 收录本周未进入每日报的条目，共 {len(items)} 条"
+        f"> 收录上次周汇总以来未进入每日报的条目，共 {len(items)} 条"
         f"（P2 {sum(1 for i in items if i.P == 'P2')} 条 / "
         f"P3 {sum(1 for i in items if i.P == 'P3')} 条）。",
         "> 上限未设：按handover要求观察一期后再定。",
