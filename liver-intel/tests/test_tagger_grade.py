@@ -765,3 +765,48 @@ def test_a_review_does_not_announce_an_approval(tagger):
                               "for non-cirrhotic MASH with moderate to severe hepatic fibrosis."})
     tagger.apply(item)
     assert "APPROVAL" not in item.study
+
+
+# --- issuer boilerplate -----------------------------------------------------
+# Vir's 2026-10-08 8-K, as filed: a prostate-cancer designation whose only liver
+# word is the company's standing self-description. It reached 第011期's draft at
+# P1 under 丁肝.
+VIR_5500 = (
+    "Vir Biotechnology Announces PSMA-targeted PRO-XTEN® Dual-masked T-cell Engager "
+    "VIR-5500 Received FDA Fast Track Designation for the Treatment of Prostate Cancer\n"
+    "Food and Drug Administration (FDA) granted Fast Track designation to VIR-5500, a "
+    "PSMA-targeted PRO-XTEN® dual-masked T-cell engager (TCE), for the treatment of "
+    "late-line metastatic castration-resistant prostate cancer.\n"
+    "About Advanced Prostate Cancer\n"
+    "Prostate cancer is among the most common cancers in men.\n"
+    "About Vir Biotechnology, Inc. \n"
+    "Vir Biotechnology, Inc. is a clinical-stage biopharmaceutical company focused on "
+    "powering the immune system to transform lives by discovering and developing medicines "
+    "for serious infectious diseases and cancer. Its clinical-stage portfolio includes "
+    "programs for chronic hepatitis delta and multiple PRO-XTEN® dual-masked T-cell "
+    "engagers across validated targets in solid tumor indications.\n")
+
+
+def release(title, body):
+    return Item(src="edgar", title=title, url="u", date="2026-10-08",
+                meta={"src_kind": "filing", "body": body})
+
+
+def test_the_issuers_boilerplate_does_not_set_the_disease(tagger):
+    item = release(VIR_5500.splitlines()[0], VIR_5500)
+    tagger.apply(item)
+    assert item.lines == []
+
+
+def test_corporate_news_from_a_roster_company_keeps_the_companys_lines(tagger, domain_map):
+    viking = next(c for c in domain_map.companies if c.name == "Viking Therapeutics")
+    body = ("Viking Therapeutics, Inc. (Nasdaq: VKTX), a clinical-stage biopharmaceutical "
+            "company focused on the development of novel therapies for metabolic and endocrine "
+            "disorders, today announced the closing of its concurrent upsized public offerings.\n"
+            "About Viking Therapeutics, Inc.\n"
+            "Viking Therapeutics, Inc. is a clinical-stage biotechnology company advancing a "
+            "next-generation portfolio of therapies for obesity and metabolic disease.\n")
+    item = release("Viking Therapeutics Announces Closing of Concurrent Upsized Offerings "
+                   "of Common Stock and Convertible Senior Notes", body)
+    tagger.apply(item)
+    assert item.lines == sorted(viking.lines)

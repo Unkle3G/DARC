@@ -362,6 +362,38 @@ ALCOHOLIC_STEATOHEPATITIS = re.compile(
     r"|\bsteatohepatitis\s+(?:caused by|due to|induced by)\s+(?:ingestible\s+)?alcohol\b"
     r"|酒精性脂肪性肝炎")
 
+#: An "About <issuer>" section is the company's standing self-description, not
+#: what the release is about. Vir's 2026-10-08 filing announced a Fast Track
+#: designation in prostate cancer; its boilerplate ("Its clinical-stage portfolio
+#: includes programs for chronic hepatitis delta") put it under 丁肝 at P1.
+ABOUT_HEADING = re.compile(r"(?m)^[ \t]*About\s+(.{2,80}?)[ \t]*$")
+
+#: Study tags that make a release about a specific product or trial. Without
+#: one, a roster company's release is corporate news (financing, people) and
+#: inherits the company's own lines.
+PRODUCT_TAGS = frozenset({
+    "PHASE1", "PHASE2", "PHASE3", "PHASE4", "PRECLINICAL", "TOPLINE", "INTERIM",
+    "ENDPOINT_MET", "ENDPOINT_MISSED", "BIOPSY_ENDPOINT", "SAFETY_SIGNAL", "DILI_SIGNAL",
+    "TERMINATED", "SUSPENDED", "WITHDRAWN", "ENROLMENT", "APPROVAL", "SUBMISSION",
+    "TRIAL_CLEARANCE", "CRL", "DESIGNATION", "ADCOM"})
+
+
+def strip_issuer_about(text: str, aliases: Iterable[str]) -> str:
+    """Drop "About <issuer>" sections, up to the next "About" heading."""
+    names = [a.lower() for a in aliases if len(a) >= 3]
+    if not names:
+        return text
+    heads = list(ABOUT_HEADING.finditer(text))
+    out, pos = [], 0
+    for k, head in enumerate(heads):
+        if head.start() < pos or not any(n in head.group(1).lower() for n in names):
+            continue
+        out.append(text[pos:head.start()])
+        pos = heads[k + 1].start() if k + 1 < len(heads) else len(text)
+    out.append(text[pos:])
+    return "".join(out)
+
+
 #: An injury model is not an injury signal. "X protects against
 #: methamphetamine-induced hepatotoxicity" is a rat study of a protective
 #: extract; the hepatotoxicity is what the experiment induced on purpose.
@@ -689,8 +721,17 @@ class Tagger:
         announced = sorted({tag for st in sentences for tag in st.tags})
         mentioned = sorted(set(result.study) - set(announced))
 
-        item.lines = result.lines
         item.study = sorted(set(item.study) | set(announced))
+        item.lines = result.lines
+        issuers = self.tag_entities(blob)[0]
+        if issuers:
+            own = strip_issuer_about(blob, [a for c in issuers for a in c.aliases])
+            if own != blob:
+                item.lines, _ = self.tag_lines(own)
+                if not item.lines and not set(item.study) & PRODUCT_TAGS:
+                    # Corporate news from a roster company is about that company.
+                    item.lines = sorted({line for c in issuers for line in c.lines},
+                                        key=lambda lid: int(lid[1:]))
         if mentioned:
             # Kept for the internal report: stated somewhere in the document,
             # but not what it announces.
