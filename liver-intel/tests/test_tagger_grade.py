@@ -810,3 +810,23 @@ def test_corporate_news_from_a_roster_company_keeps_the_companys_lines(tagger, d
                    "of Common Stock and Convertible Senior Notes", body)
     tagger.apply(item)
     assert item.lines == sorted(viking.lines)
+
+
+# --- 第012期 draft ------------------------------------------------------------
+def test_a_treatment_for_an_induced_injury_is_not_a_signal(tagger):
+    item = Item(src="pubmed", url="u", date="2026-10-12",
+                title="N-salicyloyl tryptamine derivatives as potential therapeutic agents for "
+                      "doxorubicin-induced hepatotoxicity",
+                meta={"src_kind": "journal", "publication_types": [],
+                      "body": "However, its clinical application is severely limited by profound "
+                              "hepatotoxicity, wherein oxidative stress acts as a pivotal mechanism "
+                              "underlying DOX-induced hepatotoxicity."})
+    tagger.apply(item)
+    assert "DILI_SIGNAL" not in item.study
+
+
+def test_guidelines_a_review_drew_on_are_not_a_guideline(tagger):
+    assert "GUIDELINE" not in tags_of(
+        tagger, "A total of 43 key publications were synthesized, including landmark randomized "
+                "controlled trials (SARAH, SIRveNIB, DOSISPHERE-01), recent meta-analyses and "
+                "current clinical practice guidelines from EASL, AASLD and ESMO.")

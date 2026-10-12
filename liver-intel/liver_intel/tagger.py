@@ -210,6 +210,9 @@ CITATION_CONTEXT = re.compile(
     r"(?i)\b(?:according to|as recommended|as defined|as per|per the|based on|"
     r"in line with|consistent with|in accordance with|following the|"
     r"defined (?:by|according))\b"
+    # A review listing what it drew on: "... recent meta-analyses and current
+    # clinical practice guidelines from EASL, AASLD and ESMO" (第012期 draft P1).
+    r"|\b(?:synthesi[sz]ed|summari[sz]ed|reviewed|including|included)\b[^.]{0,200}?\bguidelines?\b"
     r"|根据|依据|参照|按照")
 
 #: A document describing its own scope is not reporting an event. "This review
@@ -400,6 +403,10 @@ def strip_issuer_about(text: str, aliases: Iterable[str]) -> str:
 PROTECTIVE_MODEL = re.compile(
     r"(?i)\bagainst\b[^.;]{0,60}?-induced (?:hepatotoxicity|liver injury|hepatic injury|liver damage)"
     r"|\b(?:attenuat|ameliorat|alleviat|mitigat|prevent|revers|counteract|rescu)\w*\b[^.;]{0,80}?"
+    r"-induced (?:hepatotoxicity|liver injury|hepatic injury|liver damage)"
+    # "potential therapeutic agents for doxorubicin-induced hepatotoxicity"
+    # (第012期 draft P1): a treatment for the injury, studied in a model.
+    r"|\b(?:treat\w*|therap\w*|candidates?|agents? for|remed\w*)\b[^.;]{0,80}?"
     r"-induced (?:hepatotoxicity|liver injury|hepatic injury|liver damage)"
     r"|(?:保护|减轻|改善|缓解|拮抗)[^。；]{0,30}?(?:肝损伤|肝毒性)")
 
@@ -713,6 +720,10 @@ class Tagger:
         # ``study_mentioned`` below, which is exactly what they are -- stated
         # somewhere in the document, not announced by it.
         vetoed = catalogue_veto(item.meta.get("publication_types"))
+        # A paper whose title is about treating an induced injury is a model
+        # study throughout; its abstract names the injury in every sentence.
+        if PROTECTIVE_MODEL.search(item.title or ""):
+            vetoed = set(vetoed or ()) | {"DILI_SIGNAL"}
         if vetoed:
             sentences = [st for st in
                          (SentenceTags(st.text, st.tags - vetoed, st.future)
