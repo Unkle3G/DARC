@@ -270,11 +270,22 @@ CATALOGUE_VETO = {
 }
 
 
+GUIDELINE_TYPES = frozenset({"Practice Guideline", "Guideline", "Consensus Development Conference",
+                              "Consensus Development Conference, NIH"})
+
+
 def catalogue_veto(publication_types) -> set[str]:
     """Tags the catalogue's own genre label rules out for this document."""
+    kinds = {str(kind).strip() for kind in publication_types or []}
     out: set[str] = set()
-    for kind in publication_types or []:
-        out |= CATALOGUE_VETO.get(str(kind).strip(), set())
+    for kind in kinds:
+        out |= CATALOGUE_VETO.get(kind, set())
+    # A review describes guidelines ("the newly updated 2025 EASL clinical
+    # practice guidelines introduce ...", 第013期 draft P1); it is one only when
+    # the catalogue also files it as a guideline -- society "Expert Review"
+    # updates carry both labels.
+    if kinds & {"Review", "Systematic Review"} and not kinds & GUIDELINE_TYPES:
+        out.add("GUIDELINE")
     return out
 
 

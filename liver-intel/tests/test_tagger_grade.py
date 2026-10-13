@@ -830,3 +830,28 @@ def test_guidelines_a_review_drew_on_are_not_a_guideline(tagger):
         tagger, "A total of 43 key publications were synthesized, including landmark randomized "
                 "controlled trials (SARAH, SIRveNIB, DOSISPHERE-01), recent meta-analyses and "
                 "current clinical practice guidelines from EASL, AASLD and ESMO.")
+
+
+# --- 第013期 draft ------------------------------------------------------------
+AIH_SENTENCE = ("Diagnosing AIH remains intricate owing to atypical manifestations; however, the "
+                "newly updated 2025 European Association for the Study of the Liver clinical "
+                "practice guidelines introduce refined simplified diagnostic criteria.")
+
+
+def journal_item(title, body, types):
+    return Item(src="pubmed", title=title, url="u", date="2026-10-13",
+                meta={"src_kind": "journal", "publication_types": types, "body": body})
+
+
+def test_a_review_describing_a_guideline_is_not_one(tagger):
+    item = journal_item("Autoimmune Hepatitis: 2026 Update.", AIH_SENTENCE, ["Review"])
+    tagger.apply(item)
+    assert "GUIDELINE" not in item.study
+
+
+def test_a_review_also_filed_as_a_guideline_still_is_one(tagger):
+    item = journal_item("AGA Clinical Practice Update on Autoimmune Hepatitis: Expert Review",
+                        "This clinical practice update provides best practice advice.",
+                        ["Review", "Practice Guideline"])
+    tagger.apply(item)
+    assert "GUIDELINE" in item.study
