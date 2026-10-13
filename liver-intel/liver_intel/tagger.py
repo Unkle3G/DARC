@@ -270,6 +270,10 @@ CATALOGUE_VETO = {
 }
 
 
+GUIDELINE_TITLE = re.compile(
+    r"(?i)\b(?:guidelines?|guidance|consensus|recommendations?|practice update|"
+    r"position (?:statement|paper)|best practice advice)\b|指南|共识|专家建议|推荐意见")
+
 GUIDELINE_TYPES = frozenset({"Practice Guideline", "Guideline", "Consensus Development Conference",
                               "Consensus Development Conference, NIH"})
 
@@ -280,12 +284,6 @@ def catalogue_veto(publication_types) -> set[str]:
     out: set[str] = set()
     for kind in kinds:
         out |= CATALOGUE_VETO.get(kind, set())
-    # A review describes guidelines ("the newly updated 2025 EASL clinical
-    # practice guidelines introduce ...", 第013期 draft P1); it is one only when
-    # the catalogue also files it as a guideline -- society "Expert Review"
-    # updates carry both labels.
-    if kinds & {"Review", "Systematic Review"} and not kinds & GUIDELINE_TYPES:
-        out.add("GUIDELINE")
     return out
 
 
@@ -735,6 +733,15 @@ class Tagger:
         # study throughout; its abstract names the injury in every sentence.
         if PROTECTIVE_MODEL.search(item.title or ""):
             vetoed = set(vetoed or ()) | {"DILI_SIGNAL"}
+        # A review that describes guidelines ("the newly updated 2025 EASL
+        # clinical practice guidelines introduce ...", 第013期 draft P1) is not
+        # one. A society consensus is routinely indexed as a Review too, so the
+        # review is a guideline when its own title says so or the catalogue
+        # also files it as one.
+        kinds = {str(k).strip() for k in item.meta.get("publication_types") or []}
+        if (kinds & {"Review", "Systematic Review"} and not kinds & GUIDELINE_TYPES
+                and not GUIDELINE_TITLE.search(item.title or "")):
+            vetoed = set(vetoed or ()) | {"GUIDELINE"}
         if vetoed:
             sentences = [st for st in
                          (SentenceTags(st.text, st.tags - vetoed, st.future)
