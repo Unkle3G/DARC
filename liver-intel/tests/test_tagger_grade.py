@@ -855,3 +855,25 @@ def test_a_review_also_filed_as_a_guideline_still_is_one(tagger):
                         ["Review", "Practice Guideline"])
     tagger.apply(item)
     assert "GUIDELINE" in item.study
+
+
+# --- 第014期 draft ------------------------------------------------------------
+def test_serious_adverse_events_as_an_outcome_are_not_an_event(tagger):
+    assert "SAFETY_SIGNAL" not in tags_of(
+        tagger, "Discriminatory performance of left ventricular mass index (height)2.7(LVMI "
+                "g/m2.7) for predicting waitlist decompensation, composite serious adverse "
+                "events post liver transplant and mortality was assessed using ROC analysis, "
+                "with AUCs and optimal thresholds compared against PELD-Cr/MELD scores.")
+
+
+def test_serious_adverse_events_that_happened_still_count(tagger):
+    assert "SAFETY_SIGNAL" in tags_of(
+        tagger, "Two serious adverse events led to discontinuation in the treatment arm.")
+
+
+def test_a_kinase_named_after_hcc_is_not_hcc(tagger):
+    lines, _ = tagger.tag_lines(
+        "Ritlecitinib: A Review in Severe Alopecia Areata. Ritlecitinib is an irreversible "
+        "inhibitor of Janus kinase (JAK) 3 and the tyrosine kinase expressed in hepatocellular "
+        "carcinoma (TEC) family of kinases.")
+    assert "L6" not in lines

@@ -406,6 +406,19 @@ def strip_issuer_about(text: str, aliases: Iterable[str]) -> str:
     return "".join(out)
 
 
+#: A serious-event count named as an outcome is not an event. "predicting
+#: waitlist decompensation, composite serious adverse events post liver
+#: transplant and mortality" (第014期 draft P0) describes what a prognostic
+#: model was scored against.
+OUTCOME_CONTEXT = re.compile(
+    r"(?i)\b(?:predict\w*|composite|risk of|rates? of|incidence of|occurrence of)\b"
+    r"[^.;]{0,80}?\bserious adverse events?\b")
+
+#: Gene and kinase names that spell out a disease: the TEC kinase family is
+#: "tyrosine kinase expressed in hepatocellular carcinoma", and a JAK3/TEC
+#: inhibitor review for alopecia (第014期) landed under 肝细胞癌.
+NAMED_AFTER_DISEASE = re.compile(r"(?i)\btyrosine kinase expressed in hepatocellular carcinoma\b")
+
 #: An injury model is not an injury signal. "X protects against
 #: methamphetamine-induced hepatotoxicity" is a rat study of a protective
 #: extract; the hepatotoxicity is what the experiment induced on purpose.
@@ -558,6 +571,7 @@ class Tagger:
         hits: list[str] = []
         gated: list[str] = []
         text = ALCOHOLIC_STEATOHEPATITIS.sub("alcohol", text or "")
+        text = NAMED_AFTER_DISEASE.sub("TEC kinase", text)
         for line_id in self.dm.lines:
             strong = self._line_terms.get(line_id)
             if strong is not None and strong.search(text):
@@ -624,6 +638,8 @@ class Tagger:
                 tags.discard("APPROVAL")
             if NEGATED_FINDING.search(sentence) and not ADVERSATIVE.search(sentence):
                 tags -= {"SAFETY_SIGNAL", "DILI_SIGNAL"}
+            if "SAFETY_SIGNAL" in tags and OUTCOME_CONTEXT.search(sentence):
+                tags.discard("SAFETY_SIGNAL")
             if "DILI_SIGNAL" in tags and PROTECTIVE_MODEL.search(sentence):
                 tags.discard("DILI_SIGNAL")
             if "GUIDELINE" in tags and NO_RECOMMENDATION.search(sentence):
