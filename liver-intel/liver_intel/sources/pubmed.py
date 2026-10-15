@@ -6,6 +6,8 @@ publication date is kept in meta for reference only.
 """
 from __future__ import annotations
 
+import re
+
 import json
 import logging
 from typing import Any, Iterable
@@ -56,6 +58,14 @@ NOT_NEWS = frozenset({"Published Erratum", "Retraction of Publication",
                       "Retracted Publication", "Retraction Notice",
                       "Corrected and Republished Article",
                       "Expression of Concern"})
+
+#: The same notices before the catalogue has typed them: a fresh record can
+#: arrive with no publication type at all ("Erratum: Circular RNA sequencing
+#: identifies CircASAP1 ...", Hepatology, 第015期 draft), so the title is the
+#: only thing that says what it is.
+NOT_NEWS_TITLE = re.compile(
+    r"(?i)^\s*\[?\s*(?:erratum|corrigendum|correction(?:\s+to)?|retraction(?:\s+(?:note|notice))?"
+    r"|retracted|expression of concern)\b\s*[:.\-–]")
 
 
 class PubmedSource(BaseSource):
@@ -210,7 +220,7 @@ class PubmedSource(BaseSource):
                 "quotable": clip("\n".join(filter(None, [title, abstract])), 10_000),
             },
         )
-        if set(item.meta["publication_types"]) & NOT_NEWS:
+        if set(item.meta["publication_types"]) & NOT_NEWS or NOT_NEWS_TITLE.search(item.title):
             # A correction notice is not a paper. "Corrigendum to: COMMD10
             # inhibits HIF1a/CP loop..." collected and published as an item of
             # its own; the catalogue already says what it is.

@@ -617,8 +617,31 @@ def test_a_correction_notice_is_not_collected_as_a_paper(store, fake_fetcher, do
     # past the indexed names into the pool.
     record["pubtype"] = ["Retraction Notice", "Journal Article"]
     assert source._to_item(ctx, "2", record, "This article has been retracted.") is None
-    record["pubtype"] = ["Journal Article"]
-    assert source._to_item(ctx, "3", record, "A correction to the original.") is not None
+    record.update(pubtype=["Journal Article"], title="COMMD10 inhibits the HIF1a/CP loop.")
+    assert source._to_item(ctx, "3", record, "An original article.") is not None
+
+
+def test_an_untyped_correction_notice_is_known_by_its_title(store, fake_fetcher, domain_map):
+    """第015期's draft carried "Erratum: Circular RNA sequencing identifies
+    CircASAP1 ..." from Hepatology at P2: the record had no publication type yet."""
+    from liver_intel.sources.pubmed import PubmedSource
+
+    source = PubmedSource()
+    ctx = context(store, fake_fetcher, domain_map)
+    for n, title in enumerate([
+            "Erratum: Circular RNA sequencing identifies CircASAP1 as a key regulator in "
+            "hepatocellular carcinoma metastasis.",
+            "Expression of Concern: Necroptosis is a key pathogenic event in human and "
+            "experimental murine models of non-alcoholic steatohepatitis.",
+            "RETRACTION: Long Noncoding RNA NR2F1-AS1 Enhances the Migration and Invasion of "
+            "Hepatocellular Carcinoma Cells."]):
+        record = {"title": title, "fulljournalname": "Hepatology",
+                  "sortpubdate": "2026/10/14 00:00", "pubtype": [], "authors": []}
+        assert source._to_item(ctx, str(n), record, "") is None
+    record = {"title": "Correction of hyponatraemia in cirrhosis: a cohort study.",
+              "fulljournalname": "Hepatology", "sortpubdate": "2026/10/14 00:00",
+              "pubtype": [], "authors": []}
+    assert source._to_item(ctx, "9", record, "An original article.") is not None
 
 
 def test_the_literature_window_is_paged_not_truncated(store, fake_fetcher, domain_map):
