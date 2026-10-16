@@ -1,0 +1,251 @@
+{
+ "protocolSection": {
+  "identificationModule": {
+   "nctId": "NCT05014087",
+   "briefTitle": "Digoxin In Treatment of Alcohol Associated Hepatitis"
+  },
+  "statusModule": {
+   "overallStatus": "TERMINATED",
+   "whyStopped": "Slow accrual",
+   "startDateStruct": {
+    "date": "2021-10-08",
+    "type": "ACTUAL"
+   },
+   "primaryCompletionDateStruct": {
+    "date": "2025-06-22",
+    "type": "ACTUAL"
+   },
+   "resultsFirstPostDateStruct": {
+    "date": "2026-09-29",
+    "type": "ACTUAL"
+   },
+   "lastUpdatePostDateStruct": {
+    "date": "2026-09-29",
+    "type": "ACTUAL"
+   }
+  },
+  "designModule": {
+   "phases": [
+    "PHASE2"
+   ],
+   "enrollmentInfo": {
+    "count": 23,
+    "type": "ACTUAL"
+   }
+  },
+  "conditionsModule": {
+   "conditions": [
+    "Acute Alcoholic Hepatitis",
+    "Chemical and Drug Induced Liver Injury",
+    "Alcohol-Induced Disorders",
+    "Steatohepatitis Caused by Ingestible Alcohol"
+   ],
+   "keywords": [
+    "Acute alcoholic hepatitis",
+    "Liver injury",
+    "Liver inflammation",
+    "Liver disease",
+    "Digoxin"
+   ]
+  },
+  "sponsorCollaboratorsModule": {
+   "leadSponsor": {
+    "name": "Yale University",
+    "class": "OTHER"
+   }
+  },
+  "armsInterventionsModule": {
+   "interventions": [
+    {
+     "name": "Intravenous digoxin"
+    }
+   ]
+  },
+  "outcomesModule": {
+   "primaryOutcomes": [
+    {
+     "measure": "Change in Biomarkers of Inflammation",
+     "description": "Change in IL-6, IL-10 and TNF-alpha levels (pg/ml) at day 3 in participants with acute alcohol associated hepatitis treated with digoxin vs no digoxin.",
+     "timeFrame": "Day 3"
+    }
+   ]
+  }
+ },
+ "resultsSection": {
+  "outcomeMeasuresModule": {
+   "outcomeMeasures": [
+    {
+     "type": "PRIMARY",
+     "title": "Change in Biomarkers of Inflammation",
+     "description": "Change in IL-6, IL-10 and TNF-alpha levels (pg/ml) at day 3 in participants with acute alcohol associated hepatitis treated with digoxin vs no digoxin.",
+     "populationDescription": "Intention-to-treat",
+     "reportingStatus": "POSTED",
+     "paramType": "LEAST_SQUARES_MEAN",
+     "dispersionType": "Standard Error",
+     "unitOfMeasure": "pg/ml",
+     "timeFrame": "Day 3",
+     "groups": [
+      {
+       "id": "OG000",
+       "title": "Arm A: Digoxin",
+       "description": "In the digoxin arm, the intervention to be administered will be intravenous digoxin dosed by weight and by renal function using an adaption of the established FDA nomogram. Participants randomized to digoxin will receive an intravenous digoxin loading dose administered in 3 doses over 24 hours starting on Day 1. Digoxin levels will be monitored daily throughout the participant's hospital stay, to a maximum of 28 days. Digoxin will be discontinued at the time discharge if before 28 days.\n\nIntravenous digoxin: Loading dose: the total loading dose of digoxin will be determined using the Loading nomogram. The FDA-recommended total IV digoxin loading dose range is 8 to 12 mcg/kg. The lowest recommended dose of 8 mcg/kg was used in constructing the digoxin Loading nomogram that will be used in this trial.\n\nMaintenance dose: the maintenance dose will be started approximately 24 hours after initiation of digoxin loading. The post-loading digoxin trough will be reviewed prior to starting maintenance dosing.\n\nSubjects on P-gp inhibitors or spironolactone, will have an additional digoxin level performed 12-hours after any dose adjustment. Once digoxin levels are stable, 24-hour blood draws will be performed."
+      },
+      {
+       "id": "OG001",
+       "title": "Arm B: No Digoxin",
+       "description": "In the no digoxin arm, no study drug or placebo will be administered."
+      }
+     ],
+     "denoms": [
+      {
+       "units": "Participants",
+       "counts": [
+        {
+         "groupId": "OG000",
+         "value": "13"
+        },
+        {
+         "groupId": "OG001",
+         "value": "10"
+        }
+       ]
+      }
+     ],
+     "classes": [
+      {
+       "title": "IL-6",
+       "categories": [
+        {
+         "measurements": [
+          {
+           "groupId": "OG000",
+           "value": "-255.75",
+           "spread": "44.66"
+          },
+          {
+           "groupId": "OG001",
+           "value": "47.16",
+           "spread": "38.40"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "title": "IL-10",
+       "categories": [
+        {
+         "measurements": [
+          {
+           "groupId": "OG000",
+           "value": "19.71",
+           "spread": "4.28"
+          },
+          {
+           "groupId": "OG001",
+           "value": "-7.42",
+           "spread": "3.74"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "title": "TNF-alpha",
+       "categories": [
+        {
+         "measurements": [
+          {
+           "groupId": "OG000",
+           "value": "-146.13",
+           "spread": "25.43"
+          },
+          {
+           "groupId": "OG001",
+           "value": "26.83",
+           "spread": "21.88"
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "analyses": [
+      {
+       "groupIds": [
+        "OG000",
+        "OG001"
+       ],
+       "groupDescription": "IL-6",
+       "nonInferiorityType": "OTHER",
+       "nonInferiorityComment": "Descriptive",
+       "pValue": "0.0148",
+       "statisticalMethod": "Mixed Models Analysis",
+       "paramType": "Mean Difference (Net)",
+       "paramValue": "-302.92",
+       "ciNumSides": "TWO_SIDED",
+       "dispersionType": "STANDARD_ERROR_OF_MEAN",
+       "dispersionValue": "59.71"
+      },
+      {
+       "groupIds": [
+        "OG000",
+        "OG001"
+       ],
+       "groupDescription": "IL-10",
+       "nonInferiorityType": "OTHER",
+       "nonInferiorityComment": "Descriptive",
+       "pValue": "0.0207",
+       "statisticalMethod": "Mixed Models Analysis",
+       "paramType": "Mean Difference (Net)",
+       "paramValue": "27.12",
+       "ciNumSides": "TWO_SIDED",
+       "dispersionType": "STANDARD_ERROR_OF_MEAN",
+       "dispersionValue": "6.05"
+      },
+      {
+       "groupIds": [
+        "OG000",
+        "OG001"
+       ],
+       "groupDescription": "TNF-alpha",
+       "nonInferiorityType": "OTHER",
+       "nonInferiorityComment": "Descriptive",
+       "pValue": "0.0147",
+       "statisticalMethod": "Mixed Models Analysis",
+       "paramType": "Mean Difference (Net)",
+       "paramValue": "-172.95",
+       "ciNumSides": "TWO_SIDED",
+       "dispersionType": "STANDARD_ERROR_OF_MEAN",
+       "dispersionValue": "34.00"
+      }
+     ]
+    }
+   ]
+  },
+  "adverseEventsModule": {
+   "eventGroups": [
+    {
+     "id": "EG000",
+     "title": "Arm A: Digoxin",
+     "deathsNumAffected": 1,
+     "deathsNumAtRisk": 13,
+     "seriousNumAffected": 1,
+     "seriousNumAtRisk": 13,
+     "otherNumAffected": 8,
+     "otherNumAtRisk": 13
+    },
+    {
+     "id": "EG001",
+     "title": "Arm B: No Digoxin",
+     "deathsNumAffected": 2,
+     "deathsNumAtRisk": 10,
+     "seriousNumAffected": 4,
+     "seriousNumAtRisk": 10,
+     "otherNumAffected": 8,
+     "otherNumAtRisk": 10
+    }
+   ]
+  }
+ }
+}
