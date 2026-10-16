@@ -877,3 +877,23 @@ def test_a_kinase_named_after_hcc_is_not_hcc(tagger):
         "inhibitor of Janus kinase (JAK) 3 and the tyrosine kinase expressed in hepatocellular "
         "carcinoma (TEC) family of kinases.")
     assert "L6" not in lines
+
+
+# --- 第016期 draft ------------------------------------------------------------
+def test_limited_guidance_is_not_a_guideline(tagger):
+    assert "GUIDELINE" not in tags_of(
+        tagger, "Existing sport-heat research describes exposure and prevention yet provides "
+                "limited guidance on how adaptation should be timed, coordinated, and financed "
+                "across responsible institutions.")
+
+
+def test_a_nash_equilibrium_is_not_steatohepatitis(tagger):
+    lines, _ = tagger.tag_lines(
+        "Coordinating extreme-heat adaptation at mega-sporting events: early warning and cost "
+        "sharing in a Nash bargaining framework. The Nash equilibrium identifies the share.")
+    assert "L3" not in lines
+
+
+def test_nash_written_as_the_disease_still_counts(tagger):
+    lines, _ = tagger.tag_lines("Resmetirom in patients with NASH and fibrosis.")
+    assert "L3" in lines

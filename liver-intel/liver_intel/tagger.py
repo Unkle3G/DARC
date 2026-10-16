@@ -419,6 +419,11 @@ OUTCOME_CONTEXT = re.compile(
 #: inhibitor review for alopecia (第014期) landed under 肝细胞癌.
 NAMED_AFTER_DISEASE = re.compile(r"(?i)\btyrosine kinase expressed in hepatocellular carcinoma\b")
 
+#: "Nash" in title case is a surname -- the Nash equilibrium of a game-theory
+#: paper on heat at sporting events (第016期 draft) matched MASH's "nash".
+#: Steatohepatitis is written NASH; only that spelling may count.
+NASH_SURNAME = re.compile(r"\bNash\b")
+
 #: An injury model is not an injury signal. "X protects against
 #: methamphetamine-induced hepatotoxicity" is a rat study of a protective
 #: extract; the hepatotoxicity is what the experiment induced on purpose.
@@ -444,6 +449,9 @@ NO_RECOMMENDATION = re.compile(
     # is verbatim one of GUIDELINE's own patterns.
     r"|\b(?:are|is|will be)\s+needed\s+to\b[^.]*\brecommendations?\b"
     r"|\bto\s+(?:establish|define|inform|develop)\b[^.]*\brecommendations?\s*$"
+    # "provides limited guidance on how adaptation should be timed" (第016期
+    # draft P1): the absence of guidance, not a guideline.
+    r"|\b(?:limited|little|no|lack of|lacking|insufficient|scarce|scant)\s+guidance\b"
     r"|尚(?:不|无法)(?:能)?推荐|无法给出推荐|有待(?:制定|建立)")
 
 
@@ -572,6 +580,7 @@ class Tagger:
         gated: list[str] = []
         text = ALCOHOLIC_STEATOHEPATITIS.sub("alcohol", text or "")
         text = NAMED_AFTER_DISEASE.sub("TEC kinase", text)
+        text = NASH_SURNAME.sub("Nashname", text)
         for line_id in self.dm.lines:
             strong = self._line_terms.get(line_id)
             if strong is not None and strong.search(text):
