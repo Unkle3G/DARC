@@ -897,3 +897,21 @@ def test_a_nash_equilibrium_is_not_steatohepatitis(tagger):
 def test_nash_written_as_the_disease_still_counts(tagger):
     lines, _ = tagger.tag_lines("Resmetirom in patients with NASH and fibrosis.")
     assert "L3" in lines
+
+
+# --- 第017期 draft ------------------------------------------------------------
+def test_an_environmental_toxicant_is_not_a_drug_signal(tagger):
+    assert "DILI_SIGNAL" not in tags_of(
+        tagger, "Bisphenol A induces hepatotoxicity via a LAMP3-dependent impairment of "
+                "mitophagic processing and reduced PI3K-AKT-mTOR signaling.")
+
+
+def test_a_raised_transaminase_without_a_drug_is_not_a_signal(tagger):
+    assert "DILI_SIGNAL" not in tags_of(
+        tagger, "Association between serum transaminase elevations and clinical course in "
+                "patients with familial Mediterranean fever.")
+
+
+def test_a_raised_transaminase_on_a_drug_is_still_a_signal(tagger):
+    assert "DILI_SIGNAL" in tags_of(
+        tagger, "ALT elevation was observed in 6% of bepirovirsen-treated participants.")

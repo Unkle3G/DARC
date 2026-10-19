@@ -424,6 +424,26 @@ NAMED_AFTER_DISEASE = re.compile(r"(?i)\btyrosine kinase expressed in hepatocell
 #: Steatohepatitis is written NASH; only that spelling may count.
 NASH_SURNAME = re.compile(r"\bNash\b")
 
+#: Environmental and laboratory toxicants are not drugs: "Bisphenol A induces
+#: hepatotoxicity via a LAMP3-dependent impairment ..." (第017期 draft P1) is a
+#: toxicology mechanism study, not a hepatotoxicity signal for a medicine.
+TOXICANT = re.compile(
+    r"(?i)\b(?:bisphenol|BPA|arsenic|arsenite|cadmium|lead exposure|mercury|microplastics?|"
+    r"nanoplastics?|PFAS|PFOA|PFOS|perfluoro\w*|aflatoxin\w*|carbon tetrachloride|CCl4|"
+    r"thioacetamide|diethylnitrosamine|N-nitrosodiethylamine|NDEA|pesticide\w*|herbicide\w*|"
+    r"glyphosate|paraquat|dioxin\w*|polychlorinated biphenyls?|PCBs?|methamphetamine)\b")
+
+#: A raised transaminase is a finding, not a drug signal, unless a drug is in
+#: view: "Association between serum transaminase elevations and clinical course
+#: in patients with familial Mediterranean fever" (第017期 draft P1).
+TRANSAMINASE_ONLY = re.compile(r"(?i)\b(?:alt|transaminase|aminotransferase)\s+elevations?\b")
+DRUG_CUE = re.compile(
+    r"(?i)\b(?:drugs?|treat(?:ed|ment)|therap(?:y|ies)|dos(?:e|es|ing)|medications?|administ\w+|"
+    r"receiv\w+|exposure to|induced|related to|attributed to|"
+    r"\w+(?:mab|nib|vir|tide|sen|ran|stat|azole|mycin|cillin|floxacin))\b"
+    r"|\w+-(?:induced|related|associated)\b")
+DILI_NAMED = re.compile(r"(?i)hepatotoxicity|drug-induced liver injury|hy's law|药物性肝损伤|肝毒性|海氏法则")
+
 #: An injury model is not an injury signal. "X protects against
 #: methamphetamine-induced hepatotoxicity" is a rat study of a protective
 #: extract; the hepatotoxicity is what the experiment induced on purpose.
@@ -649,6 +669,11 @@ class Tagger:
                 tags -= {"SAFETY_SIGNAL", "DILI_SIGNAL"}
             if "SAFETY_SIGNAL" in tags and OUTCOME_CONTEXT.search(sentence):
                 tags.discard("SAFETY_SIGNAL")
+            if "DILI_SIGNAL" in tags and TOXICANT.search(sentence):
+                tags.discard("DILI_SIGNAL")
+            if ("DILI_SIGNAL" in tags and TRANSAMINASE_ONLY.search(sentence)
+                    and not DILI_NAMED.search(sentence) and not DRUG_CUE.search(sentence)):
+                tags.discard("DILI_SIGNAL")
             if "DILI_SIGNAL" in tags and PROTECTIVE_MODEL.search(sentence):
                 tags.discard("DILI_SIGNAL")
             if "GUIDELINE" in tags and NO_RECOMMENDATION.search(sentence):
