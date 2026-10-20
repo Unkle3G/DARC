@@ -354,6 +354,10 @@ NEGATED_FINDING = re.compile(
     r"demonstrate)\b"
     r"|\b(?:were|was)\s+not\s+(?:observed|reported|seen|noted|detected|found)\b"
     r"|\bno\s+(?:evidence|cases?|episodes?|instances?)\s+of\b"
+    # "... showed a transient early increase ..., without meeting criteria for
+    # drug-induced liver injury" (第018期 draft P1).
+    r"|\bwithout\s+meeting\s+(?:the\s+)?criteria\s+for\b"
+    r"|\b(?:did|does|do)\s+not\s+meet\s+(?:the\s+)?criteria\s+for\b"
     r"|\bwithout\s+(?:any\s+)?(?:serious adverse events?|treatment-related "
     r"deaths?|hepatotoxicity|drug-induced liver injury)\b"
     r"|未(?:见|观察到|出现|发生|报告)|无(?:严重不良事件|死亡病例|肝毒性)")

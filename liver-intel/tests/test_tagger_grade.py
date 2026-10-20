@@ -915,3 +915,12 @@ def test_a_raised_transaminase_without_a_drug_is_not_a_signal(tagger):
 def test_a_raised_transaminase_on_a_drug_is_still_a_signal(tagger):
     assert "DILI_SIGNAL" in tags_of(
         tagger, "ALT elevation was observed in 6% of bepirovirsen-treated participants.")
+
+
+# --- 第018期 draft ------------------------------------------------------------
+def test_not_meeting_dili_criteria_is_a_denial(tagger):
+    assert "DILI_SIGNAL" not in tags_of(
+        tagger, "Serum triglycerides fell from 184 mg/dL to 88 mg/dL, and hepatic transaminases "
+                "(aspartate aminotransferase (AST) and alanine aminotransferase (ALT)) showed a "
+                "transient early increase followed by a return toward baseline, without meeting "
+                "criteria for drug-induced liver injury.")
