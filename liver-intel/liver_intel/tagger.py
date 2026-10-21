@@ -258,10 +258,17 @@ CORRESPONDENCE = re.compile(
 #: A Review keeps GUIDELINE -- a society consensus is routinely indexed as one,
 #: and 中华外科杂志's HCC consensus would have been silenced by a blanket veto.
 #: Correspondence loses it, because a letter *about* a consensus is not one.
+#: A narrative review recites trial stages too: "recombinant human arginase has
+#: advanced to preclinical and clinical trials" and "the evidence chain from
+#: phase I studies" were both P2 entries of 第019期's draft, as EARLY_RESULT.
+#: A systematic review keeps them -- its pooled analysis is its own result.
+REVIEW_RECITAL = {"PRECLINICAL", "PHASE1", "PHASE2", "PHASE3", "PHASE4", "ENROLMENT",
+                  "TOPLINE", "INTERIM", "ENDPOINT_MET", "ENDPOINT_MISSED"}
+
 CATALOGUE_VETO = {
     # A review restates regulatory history; it does not announce it. An
     # approval that is news arrives from the regulator or the company.
-    "Review": {"DILI_SIGNAL", "SAFETY_SIGNAL", "APPROVAL", "DESIGNATION"},
+    "Review": {"DILI_SIGNAL", "SAFETY_SIGNAL", "APPROVAL", "DESIGNATION"} | REVIEW_RECITAL,
     "Systematic Review": {"DILI_SIGNAL", "SAFETY_SIGNAL", "APPROVAL", "DESIGNATION"},
     "Historical Article": {"DILI_SIGNAL", "SAFETY_SIGNAL"},
     "Letter": {"DILI_SIGNAL", "SAFETY_SIGNAL", "GUIDELINE"},

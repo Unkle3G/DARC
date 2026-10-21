@@ -497,6 +497,62 @@ def test_a_review_still_keeps_a_guideline(tagger, domain_map):
     tagger.apply(i)
     assert "GUIDELINE" in i.study
 
+# --- regressions from 第019期's draft ---------------------------------------
+ARGINASE_TITLE = "Marine microbial arginase: a metabolic therapeutic strategy for oral squamous cell carcinoma."
+ARGINASE_BODY = (
+    "Among many tumors that are arginine-auxotrophic due to downregulation of ASS1 are "
+    "hepatocellular carcinoma, melanoma, and subsets of oral cancers, and are therefore "
+    "susceptible to depletion of extracellular arginine. Although recombinant human arginase "
+    "has advanced to preclinical and clinical trials, issues such as immunological reactions "
+    "and limited stability have sparked interest in alternative sources. This review focuses "
+    "on the biochemical and structural properties of arginase, compares microbial and human "
+    "forms, and explores the mechanisms of its antitumor action.")
+CART_TITLE = "Why only 3 months? Immunological constraints on CAR-T therapy in gastrointestinal cancers."
+CART_BODY = (
+    "Taking this as a starting point, this review systematically dissects the immunological "
+    "bottlenecks that constrain CAR-T efficacy in gastrointestinal tumours. We first trace the "
+    "evidence chain from phase I studies through the randomised controlled trial to exploratory "
+    "adjuvant-therapy settings and then integrate the landscape of targets-Claudin18.2, "
+    "glypican-3, carcinoembryonic antigen, mesothelin, and CDH17-within a target-tumour matrix "
+    "encompassing gastric cancer, colorectal cancer, hepatocellular carcinoma, and pancreatic cancer.")
+
+
+@pytest.mark.parametrize("title,body", [(ARGINASE_TITLE, ARGINASE_BODY), (CART_TITLE, CART_BODY)])
+def test_a_reviews_recital_of_trial_stages_is_not_an_early_result(tagger, domain_map, title, body):
+    """Both P2 entries of 第019期's draft were narrative reviews; the "result"
+    each carried was its recital of other people's preclinical or phase I work."""
+    i = item(title, src_kind="journal", body=title + "\n" + body,
+             publication_types=["Review"])
+    tagger.apply(i)
+    result = grade.grade(i, domain_map, today="2026-10-21")
+    assert not set(i.study) & {"PHASE1", "PRECLINICAL"}
+    assert "EARLY_RESULT" not in result.signals
+    assert result.P == "P3"
+
+
+def test_a_reviews_recital_of_phase_3_trials_is_not_trial_progress(tagger, domain_map):
+    """Its preclinical veto alone would have left this one as TRIAL_PROGRESS."""
+    body = ("Adjuvant and Perioperative Systemic Therapy for Resectable Hepatocellular Carcinoma.\n"
+            "A stage-gated development program should establish agent-specific dose and washout, "
+            "preserve operability, separate timing and treatment components in randomized phase II "
+            "studies, and then confirm durable event-free and overall survival in globally "
+            "representative phase III trials.")
+    i = item(body.split("\n")[0], src_kind="journal", body=body, publication_types=["Review"])
+    tagger.apply(i)
+    result = grade.grade(i, domain_map, today="2026-10-21")
+    assert not set(i.study) & {"PHASE2", "PHASE3"}
+    assert "TRIAL_PROGRESS" not in result.signals
+
+
+def test_the_same_recital_without_a_review_label_still_counts(tagger, domain_map):
+    """The veto is the catalogue's label, not the prose: an uncatalogued
+    source saying the same thing keeps its tag."""
+    i = item(CART_TITLE, src_kind="journal", body=CART_TITLE + "\n" + CART_BODY,
+             publication_types=["Journal Article"])
+    tagger.apply(i)
+    assert "PHASE1" in i.study
+
+
 
 def test_a_letter_about_a_consensus_is_not_a_consensus(tagger, domain_map):
     title = ("Re: The Malaysian Society of Gastroenterology and Hepatology Consensus "
