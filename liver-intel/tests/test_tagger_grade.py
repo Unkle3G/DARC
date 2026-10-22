@@ -980,3 +980,31 @@ def test_not_meeting_dili_criteria_is_a_denial(tagger):
                 "(aspartate aminotransferase (AST) and alanine aminotransferase (ALT)) showed a "
                 "transient early increase followed by a return toward baseline, without meeting "
                 "criteria for drug-induced liver injury.")
+
+
+# --- regressions from 第020期's draft ---------------------------------------
+def test_a_journal_abstracts_acquisition_of_antibodies_is_not_a_deal(tagger, domain_map):
+    """第020期's draft P1: "acquisition of" is the deal vocabulary's word for
+    buying a company and immunology's word for gaining antibodies. A journal
+    abstract does not announce a transaction; the company or its filing does."""
+    title = "Passive acquisition of hepatitis B virus antibodies after allogeneic hematopoietic cell transplantation."
+    body = (title + "\nDISCUSSION: Newly detectable HBV antibodies were common after HCT without "
+            "virologic evidence of infection, suggesting passive antibody transfer from cellular "
+            "blood components, particularly platelets.")
+    i = item(title, src_kind="journal", body=body, publication_types=[])
+    tagger.apply(i)
+    result = grade.grade(i, domain_map, today="2026-10-22")
+    assert "LICENSING" in i.study  # the tag stays; only the signal needs a party to the deal
+    assert "DEAL" not in result.signals
+    assert result.P not in ("P0", "P1")
+
+
+def test_a_filed_license_agreement_is_still_a_deal(tagger, domain_map):
+    title = "Vir Biotechnology: Vir Biotechnology Enters Multi-Program Collaboration and License"
+    body = (title + "\n(Nasdaq: VIR), today announced a collaboration and license agreement with "
+            "Gilead to discover and engineer three novel PRO-XTEN® dual-masked T-cell engager (TCE) "
+            "development candidates targeting selected solid tumor-associated antigens.")
+    i = item(title, src_kind="filing", body=body)
+    tagger.apply(i)
+    # Off-line (oncology), so it grades P3 either way; the signal is the point.
+    assert "DEAL" in grade._signals_for(set(i.study), i)

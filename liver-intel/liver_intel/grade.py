@@ -208,7 +208,9 @@ def _signals_for(study: set[str], item: Item) -> list[str]:
         out.append("REG_DESIGNATION")
     if "ADCOM" in study:
         out.append("REG_MILESTONE")
-    if "LICENSING" in study:
+    if "LICENSING" in study and item.meta.get("src_kind") in ("company", "filing"):
+        # A deal is announced by a party to it. In an abstract, "acquisition of
+        # hepatitis B virus antibodies" (第020期 draft P1) is immunology.
         out.append("DEAL")
     if "GUIDELINE" in study:
         out.append("GUIDELINE")
