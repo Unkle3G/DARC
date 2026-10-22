@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "liver-intel"
+version = "1.0.0"
+description = "Liver-disease intelligence engine: first-party sources only, verified endpoints, evidence-backed grading"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "feedparser>=6.0",
+    # HKEX publishes announcements as PDFs whose search headline is only a
+    # category label, so the document is the only place the news exists.
+    "pypdf>=5.0",
+    # The significance step and the Chinese renderings are part of the method
+    # (task sheet section 0), not an extra: the SDK is a hard dependency, and
+    # the credential (ANTHROPIC_API_KEY) is the only thing left to configure.
+    "anthropic>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pyflakes>=3"]
+
+[project.scripts]
+liver-intel = "liver_intel.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["liver_intel*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
