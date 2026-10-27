@@ -208,7 +208,7 @@ BACKGROUND_SECTION = re.compile(
 #: cohort study to P1.
 CITATION_CONTEXT = re.compile(
     r"(?i)\b(?:according to|as recommended|as defined|as per|per the|based on|"
-    r"in line with|consistent with|in accordance with|following the|"
+    r"in line with|consistent with|in accordance with|following the|aligned with|"
     r"defined (?:by|according))\b"
     # A review listing what it drew on: "... recent meta-analyses and current
     # clinical practice guidelines from EASL, AASLD and ESMO" (第012期 draft P1).

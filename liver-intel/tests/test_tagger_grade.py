@@ -1008,3 +1008,21 @@ def test_a_filed_license_agreement_is_still_a_deal(tagger, domain_map):
     tagger.apply(i)
     # Off-line (oncology), so it grades P3 either way; the signal is the point.
     assert "DEAL" in grade._signals_for(set(i.study), i)
+
+
+# --- regressions from 第023期's draft ---------------------------------------
+def test_a_model_aligned_with_a_guideline_is_not_a_guideline(tagger, domain_map):
+    """第023期's draft P1: a machine-learning survival model whose features were
+    "aligned with the EASL Clinical Practice Guidelines (2018)"."""
+    title = ("Prognostic Modeling of 1-Year Survival in Hepatocellular Carcinoma: A Comparative "
+             "Evaluation of Machine Learning Methods with Class Balancing.")
+    body = (title + "\nOBJECTIVE: To develop and comparatively evaluate machine learning models for "
+            "predicting 1-year survival in hepatocellular carcinoma (HCC) patients, focusing on the "
+            "prognostic interplay between chronic liver diseases and diabetes aligned with the EASL "
+            "Clinical Practice Guidelines (2018), and to assess the impact of class balancing via "
+            "Synthetic Minority Oversampling Technique (SMOTE) on model performance.")
+    i = item(title, src_kind="journal", body=body, publication_types=[])
+    tagger.apply(i)
+    result = grade.grade(i, domain_map, today="2026-10-27")
+    assert "GUIDELINE" not in i.study
+    assert "GUIDELINE" not in result.signals
